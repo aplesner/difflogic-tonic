@@ -64,3 +64,7 @@ lightning_logs/
 
 # Claude
 .claude/
+
+# VSCode container packages
+.vscode/ 
+#.vscode/container-packages/

@@ -54,7 +54,7 @@ def train_epoch(
             if batch_idx % config.train.log_interval == 0:
                 logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
 
-            if batch_count >= 10:
+            if batch_count >= 10 and config.base.debug:
                 break  # For debugging, limit to 10 batches per epoch
 
     return total_loss / len(dataloader), batch_count, last_checkpoint_time

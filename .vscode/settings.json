@@ -1,4 +1,7 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/singularity/python-wrapper.sh",
-  "python.terminal.activateEnvironment": false
+  "python.defaultInterpreterPath": "/usr/bin/python3",
+  "python.terminal.activateEnvironment": false,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/.vscode/container-packages"
+  ]
 }

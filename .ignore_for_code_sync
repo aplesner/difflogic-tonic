@@ -2,8 +2,11 @@
 data/
 results/
 models/
+project_storage/
+scratch/
 __pycache__/
 *.pt
 *.sif
 .ignore_for_code_sync
 *.tar.gz
+*.zip

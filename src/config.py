@@ -19,15 +19,18 @@ class CNNConfig(BaseModel):
 
 class DiffLogicConfig(BaseModel):
     architecture: str = "fully_connected"  # Options: fully_connected, convolutional
-    num_neurons: int = 256
+    num_neurons: int = 64_000
     num_layers: int = 4
     connections: str = "random"
+    grad_factor: float = 1.0
+    tau: float = 10.0
 
 
 class ModelConfig(BaseModel):
     model_type: str = "MLP"
     mlp: MLPConfig = MLPConfig()
     cnn: CNNConfig = CNNConfig()
+    diff_logic: DiffLogicConfig = DiffLogicConfig()
 
 class DataLoaderConfig(BaseModel):
     batch_size: int = 64
@@ -100,6 +103,7 @@ class WandBConfig(BaseModel):
 
 class BaseConfig(BaseModel):
     seed: int = 42
+    debug: bool = False
     wandb: WandBConfig = WandBConfig()
 
 class Config(BaseModel):

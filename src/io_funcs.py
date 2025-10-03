@@ -113,8 +113,8 @@ def get_data_splits(dataset_name: str) -> tuple[dict[str, torch.Tensor], dict[st
         error_msg = (
             f"Cached data not found for dataset '{dataset_name}'\n"
             f"Checked locations:\n"
-            f"  Scratch: {scratch_train_path} ({"missing" if not scratch_exists else "found"}) and {scratch_test_path} ({"missing" if not scratch_exists else "found"})\n"
-            f"  Project: {project_train_path} ({"missing" if not project_exists else "found"}) and {project_test_path} ({"missing" if not project_exists else "found"})\n\n"
+            f"  Scratch: {scratch_train_path} ({'missing' if not scratch_exists else 'found'}) and {scratch_test_path} ({'missing' if not scratch_exists else 'found'})\n"
+            f"  Project: {project_train_path} ({'missing' if not project_exists else 'found'}) and {project_test_path} ({'missing' if not project_exists else 'found'})\n\n"
             f"Please run 'python3 prepare_data.py <config_file>' to prepare the dataset first."
         )
         logger.error(error_msg)
@@ -123,8 +123,8 @@ def get_data_splits(dataset_name: str) -> tuple[dict[str, torch.Tensor], dict[st
 
     # Load cached TensorDatasets
     logger.info(f"Loading cached data from: {train_path}, {test_path}")
-    train_cache = torch.load(train_path, map_location='cpu')
-    test_cache = torch.load(test_path, map_location='cpu')
+    train_cache = torch.load(train_path, map_location='cpu', weights_only=True)
+    test_cache = torch.load(test_path, map_location='cpu', weights_only=True)
 
     return train_cache, test_cache
 
@@ -142,7 +142,7 @@ def get_file_info(file_path: Path | None) -> tuple[float, tuple, tuple] | None:
 
     try:
         size_mb = file_path.stat().st_size / (1024 * 1024)
-        data = torch.load(file_path, map_location='cpu')
+        data = torch.load(file_path, map_location='cpu', weights_only=True)
         data_shape = tuple(data['data'].shape)
         labels_shape = tuple(data['labels'].shape)
         return size_mb, data_shape, labels_shape
@@ -241,7 +241,7 @@ def load_checkpoint(job_id: str):
         logger.info(f"No checkpoint found: {checkpoint_path}")
         return None
 
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
     logger.info(f"Checkpoint loaded: {checkpoint_path}")
     return checkpoint
 

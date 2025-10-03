@@ -18,7 +18,7 @@ fi
 
 echo "=== Data Preparation Script ==="
 echo "Config: $CONFIG_FILE"
-echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default 'storage/')}"
+echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 echo ""
 
 # Add current directory to Python path for src/ imports
@@ -31,18 +31,6 @@ python3 prepare_data.py "$CONFIG_FILE"
 if [ $? -ne 0 ]; then
     echo "Data preparation failed!"
     exit 1
-fi
-
-echo ""
-echo "=== Final Storage Status ==="
-
-# Show storage directory sizes if they exist
-if [ -n "$SCRATCH_STORAGE_DIR" ] && [ -d "$SCRATCH_STORAGE_DIR/storage" ]; then
-    echo "Scratch storage contents:"
-    ls -lh "$SCRATCH_STORAGE_DIR/storage/"
-elif [ -d "storage" ]; then
-    echo "Local storage contents:"
-    ls -lh storage/
 fi
 
 echo ""

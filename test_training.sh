@@ -14,7 +14,7 @@ export PYTHONPATH="${PYTHONPATH}:."
 echo "=== Testing Training Pipeline ==="
 echo "Job ID: $JOB_ID"
 echo "Config: $CONFIG_FILE"
-echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default 'storage/')}"
+echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 echo ""
 
 # Test 1: Start fresh training for a few batches

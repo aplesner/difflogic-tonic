@@ -1,6 +1,4 @@
-import json
-
-from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet
+from difflogic import LogicLayer, GroupSum
 import torch
 import torch.nn as nn
 
@@ -8,43 +6,43 @@ from .config import ModelConfig, MLPConfig, CNNConfig, DiffLogicConfig
 
 
 class DiffLogic(nn.Module):
-    def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int):
+    def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int, device: torch.device = torch.device('cpu')):
         super().__init__()
         logic_layers = []
 
-        connections = config.connections
-        k = config.num_neurons
-        l = config.num_layers
+        llkw = dict(grad_factor=config.grad_factor, connections=config.connections)
 
         ####################################################################################################################
 
-        if connections == "random":
-            print('randomly connected', in_dim, k, llkw, l)
-            logic_layers.append(torch.nn.Flatten())
-            logic_layers.append(LogicLayer(in_dim=in_dim, out_dim=k, **llkw))
-            for _ in range(l - 1):
-                logic_layers.append(LogicLayer(in_dim=k, out_dim=k, **llkw))
-
-            model = torch.nn.Sequential(
-                *logic_layers,
-                GroupSum(class_count, model_config.tau)
+        logic_layers.append(torch.nn.Flatten())
+        logic_layers.append(
+            LogicLayer(
+                in_dim=input_size, 
+                out_dim=config.num_neurons, 
+                connections='random', 
+                grad_factor=config.grad_factor, 
+                device=device.type
+            )
+        )
+        for _ in range(config.num_layers - 1):
+            logic_layers.append(
+                LogicLayer(
+                    in_dim=config.num_neurons, 
+                    out_dim=config.num_neurons, 
+                    connections=config.connections,
+                    grad_factor=config.grad_factor, 
+                    device=device.type
+                )
             )
 
-        ####################################################################################################################
+        self.network = torch.nn.Sequential(
+            *logic_layers,
+            GroupSum(num_classes, config.tau)
+        )
 
-        else:
-            raise NotImplementedError(arch)
-
-        ####################################################################################################################
-
-        total_num_neurons = sum(map(lambda x: x.num_neurons, logic_layers[1:-1]))
-        print(f'total_num_neurons={total_num_neurons}')
-        total_num_weights = sum(map(lambda x: x.num_weights, logic_layers[1:-1]))
-        print(f'total_num_weights={total_num_weights}')
-
-        if model_config.device == 'cuda':
-            model = model.to('cuda')
-        
+    def forward(self, x: torch.Tensor):
+        x = self.network(x)
+        return x
 
 
 class MLP(nn.Module):
@@ -72,10 +70,11 @@ class MLP(nn.Module):
         x = x.flatten(start_dim=1)
         return self.network(x)
 
+
 class CNN(nn.Module):
     """Simple CNN with two convolutional layers"""
 
-    def __init__(self, config: CNNConfig, input_shape: tuple, num_classes: int):
+    def __init__(self, config: CNNConfig, input_shape: tuple[int, int, int], num_classes: int):
         super().__init__()
 
         channels, height, width = input_shape
@@ -111,13 +110,19 @@ class CNN(nn.Module):
         x = self.fc2(x)
         return x
 
-def create_model(config: ModelConfig, input_shape: tuple, num_classes: int):
+
+def create_model(config: ModelConfig, input_shape: tuple, num_classes: int, device: torch.device = torch.device('cpu')) -> nn.Module:
     """Create model based on config"""
     if config.model_type == "MLP":
         # Calculate input size from shape (channels, height, width)
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
-        return MLP(config.mlp, input_size, num_classes)
+        model = MLP(config.mlp, input_size, num_classes)
     elif config.model_type == "CNN":
-        return CNN(config.cnn, input_shape, num_classes)
+        model = CNN(config.cnn, input_shape, num_classes)
+    elif config.model_type == "DiffLogic":
+        input_size = input_shape[0] * input_shape[1] * input_shape[2]
+        model = DiffLogic(config=config.diff_logic, input_size=input_size, num_classes=num_classes, device=device)
     else:
         raise ValueError(f"Unknown model type: {config.model_type}")
+
+    return model.to(device)

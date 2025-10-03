@@ -13,7 +13,7 @@ CONFIG_FILE=$1
 JOB_ID=$2
 
 echo "Resuming training with config: $CONFIG_FILE, job_id: $JOB_ID"
-echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default 'storage/')}"
+echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 
 # Add current directory to Python path for src/ imports
 export PYTHONPATH="${PYTHONPATH}:."

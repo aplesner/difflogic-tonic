@@ -4,7 +4,7 @@
 # Usage: ./check_and_sync_data.sh
 
 echo "=== Dataset Cache Check and Sync Script ==="
-echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default 'storage/')}"
+echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 echo ""
 
 # Add current directory to Python path for src/ imports

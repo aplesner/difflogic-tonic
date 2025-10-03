@@ -36,6 +36,10 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
+        # Also set debug in config
+        if not args.override:
+            args.override = []
+        args.override.append("base.debug=True")
 
     # Parse CLI overrides (supports space-separated values in a single --override)
     overrides = []
@@ -63,7 +67,7 @@ def main():
     logger.info(f"Input shape: {input_shape}, Num classes: {num_classes}")
 
     # Create model
-    net = model.create_model(cfg.model, input_shape, num_classes).to(device)
+    net = model.create_model(config=cfg.model, input_shape=input_shape, num_classes=num_classes, device=device)
     logger.info(f"Model: {cfg.model.model_type} with input shape {input_shape}")
 
     # Setup training
