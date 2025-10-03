@@ -128,6 +128,73 @@ def get_data_splits(dataset_name: str) -> tuple[dict[str, torch.Tensor], dict[st
 
     return train_cache, test_cache
 
+def get_file_info(file_path: Path | None) -> tuple[float, tuple, tuple] | None:
+    """Get file size and tensor shapes from a cached dataset file
+
+    Args:
+        file_path: Path to the .pt file
+
+    Returns:
+        Tuple of (size_mb, data_shape, labels_shape) or None if file doesn't exist
+    """
+    if not file_path or not file_path.exists():
+        return None
+
+    try:
+        size_mb = file_path.stat().st_size / (1024 * 1024)
+        data = torch.load(file_path, map_location='cpu')
+        data_shape = tuple(data['data'].shape)
+        labels_shape = tuple(data['labels'].shape)
+        return size_mb, data_shape, labels_shape
+    except Exception as e:
+        logger.error(f"Error loading {file_path}: {e}")
+        return None
+
+
+def discover_datasets() -> dict[str, dict[str, Path]]:
+    """Discover all datasets in both scratch and project storage locations
+
+    Returns:
+        Dict mapping dataset names to their file paths:
+        {
+            'NMNIST': {
+                'scratch_train': Path(...),
+                'scratch_test': Path(...),
+                'project_train': Path(...),
+                'project_test': Path(...),
+            }
+        }
+    """
+    from collections import defaultdict
+
+    scratch_dir = get_scratch_dir() / 'data'
+    project_dir = get_project_storage_dir() / 'data'
+
+    datasets = defaultdict(dict)
+
+    # Scan scratch storage
+    if scratch_dir.exists():
+        for file_path in scratch_dir.glob('*_train_data.pt'):
+            dataset_name = file_path.name.replace('_train_data.pt', '')
+            datasets[dataset_name]['scratch_train'] = file_path
+
+        for file_path in scratch_dir.glob('*_test_data.pt'):
+            dataset_name = file_path.name.replace('_test_data.pt', '')
+            datasets[dataset_name]['scratch_test'] = file_path
+
+    # Scan project storage
+    if project_dir.exists():
+        for file_path in project_dir.glob('*_train_data.pt'):
+            dataset_name = file_path.name.replace('_train_data.pt', '')
+            datasets[dataset_name]['project_train'] = file_path
+
+        for file_path in project_dir.glob('*_test_data.pt'):
+            dataset_name = file_path.name.replace('_test_data.pt', '')
+            datasets[dataset_name]['project_test'] = file_path
+
+    return dict(datasets)
+
+
 def copy_cache_from_project_to_scratch(dataset_name: str) -> bool:
     """Copy cached data from project storage to scratch storage if available
 

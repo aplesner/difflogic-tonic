@@ -1,6 +1,51 @@
+import json
+
+from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet
 import torch
 import torch.nn as nn
-from .config import ModelConfig, MLPConfig, CNNConfig
+
+from .config import ModelConfig, MLPConfig, CNNConfig, DiffLogicConfig
+
+
+class DiffLogic(nn.Module):
+    def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int):
+        super().__init__()
+        logic_layers = []
+
+        connections = config.connections
+        k = config.num_neurons
+        l = config.num_layers
+
+        ####################################################################################################################
+
+        if connections == "random":
+            print('randomly connected', in_dim, k, llkw, l)
+            logic_layers.append(torch.nn.Flatten())
+            logic_layers.append(LogicLayer(in_dim=in_dim, out_dim=k, **llkw))
+            for _ in range(l - 1):
+                logic_layers.append(LogicLayer(in_dim=k, out_dim=k, **llkw))
+
+            model = torch.nn.Sequential(
+                *logic_layers,
+                GroupSum(class_count, model_config.tau)
+            )
+
+        ####################################################################################################################
+
+        else:
+            raise NotImplementedError(arch)
+
+        ####################################################################################################################
+
+        total_num_neurons = sum(map(lambda x: x.num_neurons, logic_layers[1:-1]))
+        print(f'total_num_neurons={total_num_neurons}')
+        total_num_weights = sum(map(lambda x: x.num_weights, logic_layers[1:-1]))
+        print(f'total_num_weights={total_num_weights}')
+
+        if model_config.device == 'cuda':
+            model = model.to('cuda')
+        
+
 
 class MLP(nn.Module):
     """Simple Multi-Layer Perceptron"""

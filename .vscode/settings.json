@@ -1,0 +1,4 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/singularity/python-wrapper.sh",
+  "python.terminal.activateEnvironment": false
+}

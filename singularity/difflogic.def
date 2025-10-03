@@ -39,6 +39,7 @@ Stage: build
         difflogic \
         wandb \
         huggingface-hub \
+        omegaconf \
         datasets 
 
     ##################################################

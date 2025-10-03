@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--job_id', default='default', help='Job ID for checkpointing')
     parser.add_argument('--resume', action='store_true', help='Resume from checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode with verbose logging')
+    parser.add_argument('--override', action='append', help='Override config values using dotted notation. Examples: --override "train.epochs=10 train.learning_rate=0.001" or --override train.epochs=10 --override train.learning_rate=0.001')
 
     args = parser.parse_args()
 
@@ -36,8 +37,16 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
 
-    # Load config
-    cfg = config.Config.from_yaml(args.config_file)
+    # Parse CLI overrides (supports space-separated values in a single --override)
+    overrides = []
+    if args.override:
+        for override_group in args.override:
+            overrides.extend(override_group.split())
+
+    # Load config with CLI overrides
+    cfg = config.Config.from_yaml(args.config_file, overrides=overrides if overrides else None)
+    if overrides:
+        logger.info(f"Applied config overrides: {overrides}")
     helpers.setup_seed(cfg.base.seed)
 
     # Setup device

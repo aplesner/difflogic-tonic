@@ -73,6 +73,7 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
     test_dataset = torch.utils.data.TensorDataset(test_cache['data'], test_cache['labels'])
 
     # Create dataloaders with training config
+    pin_memory_device = "cuda" if torch.cuda.is_available() else "cpu"
     train_config = cfg.train
     dataloader_train = DataLoader(
         train_dataset,
@@ -80,8 +81,8 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
         prefetch_factor=train_config.dataloader.prefetch_factor,
         shuffle=train_config.dataloader.shuffle_train,
         num_workers=train_config.dataloader.num_workers,
-        pin_memory=train_config.dataloader.pin_memory,
-        pin_memory_device="cuda" if torch.cuda.is_available() else "cpu"
+        pin_memory=train_config.dataloader.pin_memory if torch.cuda.is_available() else False,
+        pin_memory_device=pin_memory_device if train_config.dataloader.pin_memory else ""
     )
 
     dataloader_test = DataLoader(
@@ -90,8 +91,8 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
         prefetch_factor=train_config.dataloader.prefetch_factor,
         shuffle=False,
         num_workers=train_config.dataloader.num_workers,
-        pin_memory=train_config.dataloader.pin_memory,
-        pin_memory_device="cuda" if torch.cuda.is_available() else "cpu"
+        pin_memory=train_config.dataloader.pin_memory if torch.cuda.is_available() else False,
+        pin_memory_device=pin_memory_device if train_config.dataloader.pin_memory else ""
     )
 
     logger.info(f"Dataloaders created with {len(train_dataset)} train and {len(test_dataset)} test samples")

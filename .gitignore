@@ -56,7 +56,8 @@ venv.bak/
 *.npy
 *.npz
 *.zip
-data/
+project_storage/*
+scratch/
 
 # PyTorch Lightning
 lightning_logs/

@@ -30,31 +30,32 @@ def train_epoch(
     current_time = time.time()
     checkpoint_interval_seconds = config.train.checkpoint_interval_minutes * 60
 
-    for batch_idx, (data_batch, targets) in enumerate(dataloader):
-        data_batch, targets = data_batch.to(device), targets.to(device)
+    with torch.autocast(device.type if device.type != 'mps' else 'cpu'):
+        for batch_idx, (data_batch, targets) in enumerate(dataloader):
+            data_batch, targets = data_batch.to(device, dtype=torch.bfloat16), targets.to(device)
 
-        optimizer.zero_grad()
-        outputs = model(data_batch)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            outputs = model(data_batch)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
 
-        total_loss += loss.item()
-        batch_count += 1
+            total_loss += loss.item()
+            batch_count += 1
 
-        # Time-based checkpointing
-        current_time = time.time()
-        if current_time - last_checkpoint_time >= checkpoint_interval_seconds:
-            elapsed_time = current_time - start_time
-            logger.info(f"Batch {batch_count}, Loss: {loss.item():.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
-            io_funcs.save_checkpoint(model=model, optimizer=optimizer, batch_count=batch_count, config=config, job_id=job_id, elapsed_time=elapsed_time)
-            last_checkpoint_time = current_time
+            # Time-based checkpointing
+            current_time = time.time()
+            if current_time - last_checkpoint_time >= checkpoint_interval_seconds:
+                elapsed_time = current_time - start_time
+                logger.info(f"Batch {batch_count}, Loss: {loss.item():.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
+                io_funcs.save_checkpoint(model=model, optimizer=optimizer, batch_count=batch_count, config=config, job_id=job_id, elapsed_time=elapsed_time)
+                last_checkpoint_time = current_time
 
-        if batch_idx % config.train.log_interval == 0:
-            logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
+            if batch_idx % config.train.log_interval == 0:
+                logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
 
-        if batch_count >= 10:
-            break  # For debugging, limit to 10 batches per epoch
+            if batch_count >= 10:
+                break  # For debugging, limit to 10 batches per epoch
 
     return total_loss / len(dataloader), batch_count, last_checkpoint_time
 
@@ -66,9 +67,9 @@ def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module, dev
     correct = 0
     total = 0
 
-    with torch.no_grad():
+    with torch.no_grad() and torch.autocast(device.type if device.type != 'mps' else 'cpu'):
         for data_batch, targets in dataloader:
-            data_batch, targets = data_batch.to(device), targets.to(device)
+            data_batch, targets = data_batch.to(device, dtype=torch.bfloat16), targets.to(device)
             outputs = model(data_batch)
             loss = criterion(outputs, targets)
 

@@ -44,8 +44,8 @@ def process_dataset(dataset, transform, prep_config: PrepareDataConfig) -> torch
     processor = DatasetProcessor(dataset, transform)
 
     with Pool(prep_config.num_threads) as p:
-        # dataset_size = len(dataset)
-        dataset_size = min(len(dataset), 10)
+        dataset_size = len(dataset)
+        # dataset_size = min(len(dataset), 10)
         results = list(
             tqdm.tqdm(
                 p.imap(

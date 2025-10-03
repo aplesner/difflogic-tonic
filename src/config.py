@@ -17,6 +17,13 @@ class CNNConfig(BaseModel):
     conv2_channels: int = 64
     fc_hidden_size: int = 128
 
+class DiffLogicConfig(BaseModel):
+    architecture: str = "fully_connected"  # Options: fully_connected, convolutional
+    num_neurons: int = 256
+    num_layers: int = 4
+    connections: str = "random"
+
+
 class ModelConfig(BaseModel):
     model_type: str = "MLP"
     mlp: MLPConfig = MLPConfig()
@@ -102,8 +109,20 @@ class Config(BaseModel):
     train: TrainConfig = TrainConfig()
     
     @classmethod
-    def from_yaml(cls, path: str):
+    def from_yaml(cls, path: str, overrides: list[str] | None = None):
+        """Load config from YAML file with optional CLI overrides
+
+        Args:
+            path: Path to YAML config file
+            overrides: List of dotted-path overrides (e.g., ["train.epochs=10", "model.mlp.hidden_size=512"])
+        """
         conf = OmegaConf.load(path)
+
+        # Apply CLI overrides if provided
+        if overrides:
+            override_conf = OmegaConf.from_dotlist(overrides)
+            conf = OmegaConf.merge(conf, override_conf)
+
         config_dict = OmegaConf.to_container(conf, resolve=True)
         if isinstance(config_dict, dict):
             return cls(**config_dict) # type: ignore
