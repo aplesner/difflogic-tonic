@@ -1,0 +1,23 @@
+# Data preparation configuration for NMNIST dataset
+# This config is used by prepare_data.py to process and cache the dataset
+
+base:
+  seed: 42
+
+data:
+  # Dataset selection
+  name: NMNIST  # Options: NMNIST, CIFAR10DVS
+
+  # Storage paths (will use SCRATCH_STORAGE_DIR if set)
+  data_root: data/  # Raw dataset location
+
+  # Preprocessing parameters
+  events_per_frame: 1500   # Number of events per frame
+  overlap: 1000            # Overlap between consecutive frames
+  denoise_time: 1200       # Denoise filter time in microseconds (0 to disable)
+
+  # Processing settings (multiprocessing)
+  num_threads: 12           # Number of parallel processing threads
+
+  # Cache control
+  reset_cache: true       # Set to true to force regeneration

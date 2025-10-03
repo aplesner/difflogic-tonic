@@ -1,0 +1,45 @@
+base:
+  seed: 42
+  wandb:
+    online: false
+    project: "difflogic-tonic"
+    entity: null
+    run_name: null
+    tags: ["nmnist", "mlp"]
+    notes: null
+
+model:
+  model_type: MLP
+  mlp:
+    hidden_size: 512
+    num_hidden_layers: 1
+
+data:
+  name: NMNIST  # Options: NMNIST, CIFAR10DVS
+  data_root: data/
+  metadata_path: metadata/
+  events_per_frame: 1500  # Number of events per frame
+  overlap: 1000
+  denoise_time: 1200
+  reset_cache: false
+  dataloader:
+    batch_size: 16
+    num_workers: 8
+    prefetch_factor: 10
+    pin_memory: false
+    shuffle_train: false
+
+train:
+  epochs: 1
+  learning_rate: 1e-3
+  log_interval: 1
+  save_model: false
+  checkpoint_interval_minutes: 5.0
+  model_path: models/
+  device: cpu
+  dataloader:
+    batch_size: 64
+    num_workers: 6
+    prefetch_factor: 5
+    pin_memory: true
+    shuffle_train: true
