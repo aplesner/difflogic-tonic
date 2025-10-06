@@ -32,6 +32,7 @@ def main():
 
     args = parser.parse_args()
 
+
     # If debug, set logging to DEBUG level across all modules
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -53,9 +54,15 @@ def main():
         logger.info(f"Applied config overrides: {overrides}")
     helpers.setup_seed(cfg.base.seed)
 
+    # If job_id provided via CLI, override config
+    if args.job_id:
+        cfg.base.job_id = args.job_id
+    if not cfg.base.job_id:
+        cfg.base.job_id = "default"
+    logger.info(f"Using job ID: {cfg.base.job_id}")
+
     # Setup device
-    device = torch.device(cfg.train.device)
-    logger.info(f"Using device: {device}")
+    logger.info(f"Using device: {cfg.train.device}")
 
     # Get dataloaders
     logger.info("Setting up dataloaders...")
@@ -67,7 +74,7 @@ def main():
     logger.info(f"Input shape: {input_shape}, Num classes: {num_classes}")
 
     # Create model
-    net = model.create_model(config=cfg.model, input_shape=input_shape, num_classes=num_classes, device=device)
+    net = model.create_model(config=cfg, input_shape=input_shape, num_classes=num_classes)
     logger.info(f"Model: {cfg.model.model_type} with input shape {input_shape}")
 
     # Setup training
@@ -110,9 +117,7 @@ def main():
             dataloader=train_dataloader,
             criterion=criterion,
             optimizer=optimizer,
-            device=device,
             batch_count=batch_count,
-            job_id=args.job_id,
             config=cfg,
             start_time=start_time,
             last_checkpoint_time=last_checkpoint_time
@@ -123,7 +128,7 @@ def main():
             model=net,
             dataloader=test_dataloader,
             criterion=criterion,
-            device=device
+            config=cfg
         )
 
         logger.info(f"Epoch {epoch + 1} - Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")

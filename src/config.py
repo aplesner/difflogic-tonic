@@ -8,29 +8,33 @@ from omegaconf import OmegaConf
 from pydantic import BaseModel, field_validator
 import torch
 
-class MLPConfig(BaseModel):
-    hidden_size: int = 512
-    num_hidden_layers: int = 6
-
-class CNNConfig(BaseModel):
-    conv1_channels: int = 32
-    conv2_channels: int = 64
-    fc_hidden_size: int = 128
-
-class DiffLogicConfig(BaseModel):
-    architecture: str = "fully_connected"  # Options: fully_connected, convolutional
-    num_neurons: int = 64_000
-    num_layers: int = 4
-    connections: str = "random"
-    grad_factor: float = 1.0
-    tau: float = 10.0
+from .model_config import ModelConfig
 
 
-class ModelConfig(BaseModel):
-    model_type: str = "MLP"
-    mlp: MLPConfig = MLPConfig()
-    cnn: CNNConfig = CNNConfig()
-    diff_logic: DiffLogicConfig = DiffLogicConfig()
+class WandBConfig(BaseModel):
+    online: bool = True
+    project: str = "difflogic-tonic"
+    entity: str | None = None
+    run_name: str | None = None
+    tags: list[str] = []
+    notes: str | None = None
+
+
+class BaseConfig(BaseModel):
+    seed: int = 42
+    debug: bool = False
+    job_id: str = "default"
+    wandb: WandBConfig = WandBConfig()
+
+    @field_validator('job_id')
+    @classmethod
+    def validate_job_id(cls, v: str) -> str:
+        return v if v else "default"
+
+
+class DataConfig(BaseModel):
+    name: str = "NMNIST"
+
 
 class DataLoaderConfig(BaseModel):
     batch_size: int = 64
@@ -38,26 +42,6 @@ class DataLoaderConfig(BaseModel):
     prefetch_factor: int = 5
     pin_memory: bool = True
     shuffle_train: bool = True
-
-class DataConfig(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-
-    name: str = "NMNIST"
-    data_root: str = "data/"
-    metadata_path: str = "metadata/"
-    events_per_frame: int = 5000
-    overlap: int = 0
-    denoise_time: int = 1000
-    reset_cache: bool = False
-    dataloader: DataLoaderConfig = DataLoaderConfig()
-
-    @field_validator('data_root', 'metadata_path')
-    @classmethod
-    def resolve_storage_path(cls, v: str) -> str:
-        scratch_dir = os.environ.get('SCRATCH_STORAGE_DIR')
-        if scratch_dir:
-            return str(Path(scratch_dir) / v)
-        return v
 
 
 class TrainConfig(BaseModel):
@@ -71,6 +55,7 @@ class TrainConfig(BaseModel):
     checkpoint_interval_minutes: float = 5.0  # time-based checkpointing
     model_path: str = "models/"
     device: str | torch.device = "cpu"
+    dtype: str | torch.dtype = "float16"  # options: float16, bfloat16, float32
     dataloader: DataLoaderConfig = DataLoaderConfig()
 
     @field_validator('model_path')
@@ -93,19 +78,27 @@ class TrainConfig(BaseModel):
             return torch.device('cpu')
 
         return v
-
-class WandBConfig(BaseModel):
-    online: bool = False
-    project: str = "difflogic-tonic"
-    entity: str | None = None
-    run_name: str | None = None
-    tags: list[str] = []
-    notes: str | None = None
-
-class BaseConfig(BaseModel):
-    seed: int = 42
-    debug: bool = False
-    wandb: WandBConfig = WandBConfig()
+    
+    @field_validator('dtype')
+    @classmethod
+    def validate_dtype(cls, v: str | torch.dtype) -> torch.dtype:
+        if isinstance(v, str):
+            dtype_map = {
+                'float16': torch.float16,
+                'bfloat16': torch.bfloat16,
+                'float32': torch.float32
+            }
+            if v in dtype_map:
+                return dtype_map[v]
+            else:
+                raise ValueError(f"Unsupported dtype string: {v}. Supported: {list(dtype_map.keys())}")
+        elif isinstance(v, torch.dtype):
+            if v in {torch.float16, torch.bfloat16, torch.float32}:
+                return v
+            else:
+                raise ValueError(f"Unsupported torch.dtype: {v}. Supported: float16, bfloat16, float32")
+        else:
+            raise TypeError(f"dtype must be a string or torch.dtype, got {type(v)}")
 
 class Config(BaseModel):
     base: BaseConfig = BaseConfig()

@@ -2,7 +2,8 @@ from difflogic import LogicLayer, GroupSum
 import torch
 import torch.nn as nn
 
-from .config import ModelConfig, MLPConfig, CNNConfig, DiffLogicConfig
+from .config import Config
+from .model_config import MLPConfig, CNNConfig, DiffLogicConfig
 
 
 class DiffLogic(nn.Module):
@@ -111,18 +112,19 @@ class CNN(nn.Module):
         return x
 
 
-def create_model(config: ModelConfig, input_shape: tuple, num_classes: int, device: torch.device = torch.device('cpu')) -> nn.Module:
+def create_model(config: Config, input_shape: tuple, num_classes: int) -> nn.Module:
     """Create model based on config"""
-    if config.model_type == "MLP":
+    model_config = config.model
+    if model_config.model_type == "MLP":
         # Calculate input size from shape (channels, height, width)
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
-        model = MLP(config.mlp, input_size, num_classes)
-    elif config.model_type == "CNN":
-        model = CNN(config.cnn, input_shape, num_classes)
-    elif config.model_type == "DiffLogic":
+        model = MLP(model_config.mlp, input_size, num_classes)
+    elif model_config.model_type == "CNN":
+        model = CNN(model_config.cnn, input_shape, num_classes)
+    elif model_config.model_type == "DiffLogic":
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
-        model = DiffLogic(config=config.diff_logic, input_size=input_size, num_classes=num_classes, device=device)
+        model = DiffLogic(config=model_config.diff_logic, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
     else:
-        raise ValueError(f"Unknown model type: {config.model_type}")
+        raise ValueError(f"Unknown model type: {model_config.model_type}")
 
-    return model.to(device)
+    return model.to(config.train.device)

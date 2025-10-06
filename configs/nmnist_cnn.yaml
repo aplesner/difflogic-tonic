@@ -1,12 +1,31 @@
 base:
   seed: 42
+  job_id: "baseline_cnn_run"
   wandb:
-    online: false
-    project: "difflogic-tonic"
     entity: null
     run_name: null
     tags: ["nmnist", "cnn"]
     notes: null
+
+data:
+  name: NMNIST  # Options: NMNIST, CIFAR10DVS
+
+train:
+  epochs: 10
+  learning_rate: 3e-4
+  log_interval: 1
+  debugging_steps: 10
+  save_model: false
+  checkpoint_interval_minutes: 10.0
+  model_path: models/
+  device: cuda
+  dtype: bfloat16 # options: float16, bfloat16, float32
+  dataloader:
+    batch_size: 64
+    num_workers: 6
+    prefetch_factor: 5
+    pin_memory: true
+    shuffle_train: true
 
 model:
   model_type: CNN
@@ -14,34 +33,3 @@ model:
     conv1_channels: 32
     conv2_channels: 64
     fc_hidden_size: 128
-
-data:
-  name: NMNIST  # Options: NMNIST, CIFAR10DVS
-  data_root: data/
-  metadata_path: metadata/
-  events_per_frame: 1500  # Number of events per frame
-  overlap: 1000
-  denoise_time: 1200
-  reset_cache: false
-  dataloader:
-    batch_size: 16
-    num_workers: 8
-    prefetch_factor: 10
-    pin_memory: false
-    shuffle_train: false
-
-train:
-  epochs: 10
-  learning_rate: 3e-4
-  log_interval: 100
-  debugging_steps: 1000
-  save_model: false
-  checkpoint_interval_minutes: 10.0
-  model_path: models/
-  device: cuda
-  dataloader:
-    batch_size: 64
-    num_workers: 6
-    prefetch_factor: 5
-    pin_memory: true
-    shuffle_train: true
