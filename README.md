@@ -1,6 +1,6 @@
 # DiffLogic Tonic
 
-Event-based vision training framework for spiking neural networks (SNNs) on neuromorphic datasets.
+Event-based vision training framework for difflogic on neuromorphic datasets.
 
 ## Quick Start
 
@@ -76,6 +76,14 @@ Configuration options in `configs/prepare_*.yaml`:
 
 Discovers datasets and syncs between scratch/project storage if needed.
 
+
+### Upload to the cluster 
+
+```bash
+./helper_scripts/sync_data_to_remote.sh
+```
+Uploads the datasets to the cluster 
+
 ## Training
 
 ### Basic Training
@@ -83,6 +91,8 @@ Discovers datasets and syncs between scratch/project storage if needed.
 ```bash
 ./train.sh configs/nmnist_difflogic.yaml my_job_id
 ```
+
+Remember to set the singularity environment variable. The easiest is to run `source helper_scripts/project_variables.sh`
 
 ### Resume from Checkpoint
 
