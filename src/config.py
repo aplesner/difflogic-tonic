@@ -66,6 +66,7 @@ class TrainConfig(BaseModel):
     epochs: int = 3
     learning_rate: float = 1e-3
     log_interval: int = 1
+    debugging_steps: int = 1000
     save_model: bool = False
     checkpoint_interval_minutes: float = 5.0  # time-based checkpointing
     model_path: str = "models/"

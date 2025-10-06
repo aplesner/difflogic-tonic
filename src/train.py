@@ -16,12 +16,14 @@ def train_step(
         batch: tuple[torch.Tensor, torch.Tensor],
         criterion: nn.Module,
         optimizer: optim.Optimizer,
-        device: torch.device
+        config: config.Config,
+        device: torch.device,
+        dtype: torch.dtype = torch.float16,
     ) -> tuple[float, float]:
     """Perform a single training step"""
     data, targets = batch
 
-    data, targets = data.to(device), targets.to(device)
+    data, targets = data.to(device, dtype=dtype), targets.to(device)
 
     optimizer.zero_grad()
     outputs = model(data)
@@ -33,6 +35,9 @@ def train_step(
     _, predicted = outputs.max(1)
     correct = predicted.eq(targets).sum().item()
     accuracy = correct / targets.size(0)
+
+    # if config.base.debug:
+    #     logger.debug(f"Device and dtype of outputs: {outputs.device}, {outputs.dtype}")
 
     return loss.item(), accuracy
 
@@ -55,9 +60,11 @@ def train_epoch(
     current_time = time.time()
     checkpoint_interval_seconds = config.train.checkpoint_interval_minutes * 60
 
-    with torch.autocast(device.type if device.type != 'mps' else 'cpu', dtype=torch.bfloat16):
-        for batch_idx, (data_batch, targets) in enumerate(dataloader):
-            loss, accuracy = train_step(model, (data_batch, targets), criterion, optimizer, device)
+    with torch.autocast(device.type if device.type != 'mps' else 'cpu', dtype=torch.float16):
+        for batch_idx, batch in enumerate(dataloader):
+            loss, accuracy = train_step(
+                model=model, batch=batch, criterion=criterion, optimizer=optimizer, config=config, device=device, dtype=torch.float16
+            )
             total_loss += loss
             batch_count += 1
 
@@ -70,10 +77,10 @@ def train_epoch(
                 last_checkpoint_time = current_time
 
             if batch_idx % config.train.log_interval == 0:
-                logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
+                logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {100 * accuracy:.2f}%")
 
-            if batch_idx >= 10 and config.base.debug:
-                break  # For debugging, limit to 10 batches per epoch
+            if config.base.debug and batch_idx >= config.train.debugging_steps:
+                break  # For debugging, limit to specified batches per epoch
 
     return total_loss / len(dataloader), batch_count, last_checkpoint_time
 
@@ -87,7 +94,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module, dev
 
     with torch.no_grad() and torch.autocast(device.type if device.type != 'mps' else 'cpu'):
         for data_batch, targets in dataloader:
-            data_batch, targets = data_batch.to(device, dtype=torch.bfloat16), targets.to(device)
+            data_batch, targets = data_batch.to(device, dtype=torch.float16), targets.to(device)
             outputs = model(data_batch)
             loss = criterion(outputs, targets)
 
