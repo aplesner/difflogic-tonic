@@ -32,6 +32,10 @@ def train_step(
     """Perform a single training step"""
     data, targets = batch
 
+    # Convert boolean data to float if necessary
+    if data.dtype == torch.bool:
+        data = data.float()
+
     data, targets = data.to(device, dtype=dtype), targets.to(device)
 
     optimizer.zero_grad()
@@ -43,7 +47,15 @@ def train_step(
     # get sample accuracy
     _, accuracy = get_correct_and_accuracy(outputs, targets)
 
-    # if config.base.debug and batch_idx % config.train.log_interval == 0:
+    if config.base.debug:# and batch_idx % config.train.log_interval == 0:
+        # print data, target and output stats for debugging
+        logger.debug(f"Batch {batch_idx}:")
+        print(targets.cpu().numpy().tolist())
+        # print the output tensor as indices of the max logits
+        print(outputs.argmax(dim=1).cpu().numpy().tolist())
+        
+        logger.debug(f"  Loss: {loss.item():.4f}, Accuracy: {accuracy*100:.2f}%")
+        # Uncomment the following line to log output tensor details
     #     logger.debug(f"Device, dtype and shape of outputs: {outputs.device}, {outputs.dtype}, {outputs.shape}")
 
     return loss.item(), accuracy
@@ -100,8 +112,12 @@ def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module, con
     dtype = config.train.dtype if isinstance(config.train.dtype, torch.dtype) else getattr(torch, config.train.dtype)
     device = config.train.device if isinstance(config.train.device, torch.device) else torch.device(config.train.device)
 
-    with torch.no_grad() and torch.autocast(device.type if device.type != 'mps' else 'cpu'):
+    with torch.no_grad(), torch.autocast(device.type if device.type != 'mps' else 'cpu'):
         for data_batch, targets in dataloader:
+            # Convert boolean data to float if necessary
+            if data_batch.dtype == torch.bool:
+                data_batch = data_batch.float()
+
             data_batch, targets = data_batch.to(device, dtype=dtype), targets.to(device)
             outputs = model(data_batch)
             loss = criterion(outputs, targets)

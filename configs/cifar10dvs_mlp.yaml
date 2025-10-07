@@ -1,18 +1,18 @@
 base:
   seed: 42
-  job_id: "baseline_cnn_run"
+  job_id: "baseline_mlp_run"
   wandb:
     entity: null
     run_name: null
-    tags: ["nmnist", "cnn"]
+    tags: ["cifar10dvs", "mlp"]
     notes: null
 
 data:
-  name: NMNIST  # Options: NMNIST, CIFAR10DVS
+  name: CIFAR10DVS  # Options: NMNIST, CIFAR10DVS
 
 train:
   epochs: 10
-  learning_rate: 3e-4
+  learning_rate: 1e-3
   log_interval: 250
   debugging_steps: 1000
   save_model: false
@@ -28,8 +28,7 @@ train:
     shuffle_train: true
 
 model:
-  model_type: CNN
-  cnn:
-    conv1_channels: 32
-    conv2_channels: 64
-    fc_hidden_size: 128
+  model_type: MLP
+  mlp:
+    hidden_size: 512
+    num_hidden_layers: 1
