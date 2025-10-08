@@ -30,7 +30,7 @@ This file tracks tasks, improvements, and known issues for the DiffLogic Tonic p
 - [ ] 🟡 Discretize difflogic models
 
 #### Data Processing
-- [ ] 🔴 Do the test/train split before processing the samples.
+- [🚧] 🔴 Do the test/train split before processing the samples.
 - [ ] 🟡 Add support for additional neuromorphic datasets (DVS-Gesture, N-Caltech101)
 - [ ] 🟢 Add dataset statistics and visualization tools
 
