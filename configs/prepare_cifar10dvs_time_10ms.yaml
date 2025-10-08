@@ -1,0 +1,31 @@
+# Data preparation configuration for CIFAR10DVS dataset
+# Frame mode: Time window with 10ms time window
+
+base:
+  seed: 42
+
+data:
+  # Dataset selection
+  name: CIFAR10DVS
+
+  # Storage paths (will use SCRATCH_STORAGE_DIR if set)
+  data_root: data/
+
+  # Frame slicing mode
+  frame_mode: time_window
+
+  # Time window mode parameters (in microseconds)
+  time_window: 10000       # 10ms = 10000 microseconds
+  overlap: 0.75
+
+  # Preprocessing parameters
+  denoise_time: 5000       # Denoise filter time in microseconds (0 to disable)
+
+  # Processing settings (multiprocessing)
+  num_threads: 16
+
+  # Dataset splitting
+  test_split: 0.2
+
+  # Cache control
+  reset_cache: true

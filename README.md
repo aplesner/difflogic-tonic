@@ -52,21 +52,64 @@ Datasets are prepared to both locations. Training automatically uses scratch for
 
 ## Data Preparation
 
-Prepare and cache event-based datasets before training:
+Prepare and cache event-based datasets before training. The pipeline supports multiple framing strategies for creating dataset variants.
+
+### Single Dataset Variant
 
 ```bash
 # NMNIST
 ./prepare_data.sh configs/prepare_nmnist.yaml
 
-# CIFAR10-DVS
-./prepare_data.sh configs/prepare_cifar10dvs.yaml
+# CIFAR10-DVS with specific framing
+./prepare_data.sh configs/prepare_cifar10dvs_events_20k.yaml
 ```
 
+### Multiple Dataset Variants (Parallel)
+
+Use SLURM job arrays to prepare multiple variants in parallel:
+
+```bash
+sbatch slurm_prepare_data_array.sh
+```
+
+This prepares 10 variants with different framing strategies:
+- Event count mode: 5k, 10k, 20k, 30k, 50k events per frame
+- Time window mode: 5ms, 10ms, 20ms, 50ms, 100ms time windows
+
+Each variant is cached with a unique identifier (e.g., `events_20000_overlap0_denoise5000`).
+
+### Configuration Options
+
 Configuration options in `configs/prepare_*.yaml`:
-- `events_per_frame`: Events per input frame
-- `overlap`: Overlap between consecutive frames
-- `denoise_time`: Temporal denoising filter (microseconds)
+
+**Frame Slicing Mode:**
+- `frame_mode`: `event_count` or `time_window`
+  - `event_count`: Fixed number of events per frame (consistent visual composition)
+  - `time_window`: Fixed time duration per frame (consistent temporal resolution)
+
+**Event Count Mode:**
+- `events_per_frame`: Number of events per frame
+- `overlap`: Number of overlapping events between frames
+
+**Time Window Mode:**
+- `time_window`: Time duration in microseconds per frame
+- `overlap`: Overlap duration in microseconds between frames
+
+**Common Options:**
+- `denoise_time`: Temporal denoising filter in microseconds (0 to disable)
 - `reset_cache`: Force regeneration if `true`
+- `output_suffix`: Optional custom cache identifier
+
+**Example:**
+```yaml
+data:
+  frame_mode: event_count
+  events_per_frame: 20000
+  overlap: 0
+  denoise_time: 5000
+```
+
+See [PREPARE_DATA_VARIANTS.md](PREPARE_DATA_VARIANTS.md) for detailed documentation.
 
 ### Check Data Status
 
@@ -130,7 +173,19 @@ base:
   job_id: "my_experiment"
 
 data:
-  name: NMNIST  # NMNIST or CIFAR10DVS
+  name: CIFAR10DVS  # NMNIST or CIFAR10DVS
+
+  # Select specific cached variant (optional)
+  cache_identifier: "events_20000_overlap0_denoise5000"
+
+  # Input transforms (applied during training)
+  downsample_pool_size: 2  # Max pooling: 128x128 -> 64x64
+
+  # Data augmentation (training only)
+  augmentation:
+    horizontal_flip: true
+    vertical_flip: false
+    salt_pepper_noise: 0.05  # 5% pixel flip probability
 
 train:
   epochs: 3
@@ -147,6 +202,43 @@ model:
     num_neurons: 4000
     num_layers: 4
 ```
+
+### Dataset Variant Selection
+
+Training can use specific cached dataset variants prepared with different framing parameters:
+
+```yaml
+data:
+  name: CIFAR10DVS
+  cache_identifier: "events_20000_overlap0_denoise5000"  # Use 20k events variant
+```
+
+Available cache identifiers match the prepare_data output:
+- `events_5000_overlap0_denoise5000` - 5k events per frame
+- `events_20000_overlap0_denoise5000` - 20k events per frame
+- `time_10000_overlap0_denoise5000` - 10ms time window
+- etc.
+
+Leave `cache_identifier` as `null` to use the default cache (backward compatible).
+
+See [CACHE_VARIANT_USAGE.md](CACHE_VARIANT_USAGE.md) for complete documentation.
+
+### Input Transforms
+
+Training applies transforms on top of cached data:
+
+**Downsampling:**
+- `downsample_pool_size`: Max pooling kernel size (e.g., 2 for 2x2 pooling)
+  - Reduces input dimensions: 128×128 → 64×64 (pool_size=2)
+  - Applied to both train and test data
+  - Model input shape automatically adjusted
+
+**Augmentation** (training only):
+- `horizontal_flip`: Random horizontal flip
+- `vertical_flip`: Random vertical flip
+- `salt_pepper_noise`: Probability to flip random binary pixels (0.0-1.0)
+
+Transforms are applied per-sample before batching, keeping the pipeline flexible and configurable.
 
 ## Models
 
@@ -169,21 +261,30 @@ Located in [helper_scripts/](helper_scripts/):
 
 ```
 .
-├── configs/                # YAML configuration files
-├── src/                    # Source code
-│   ├── config.py          # Config management
-│   ├── data.py            # Dataset loading
-│   ├── model.py           # Model definitions
-│   ├── train.py           # Training loops
-│   ├── io_funcs.py        # Storage utilities
-│   └── helpers.py         # Utility functions
-├── main.py                # Training entry point
-├── prepare_data.py        # Data preparation entry point
-├── check_and_sync_data.py # Data synchronization utility
-├── train.sh               # Training wrapper script
-├── prepare_data.sh        # Data prep wrapper script
-├── singularity/           # Container definitions
-└── helper_scripts/        # Cluster sync utilities
+├── configs/                           # YAML configuration files
+│   ├── prepare_*.yaml                # Data preparation configs
+│   ├── *_difflogic.yaml              # Training configs
+│   └── *_events*.yaml                # Variant-specific training configs
+├── src/                               # Source code
+│   ├── config.py                     # Config management
+│   ├── data.py                       # Dataset loading & transforms
+│   ├── model.py                      # Model definitions
+│   ├── train.py                      # Training loops
+│   ├── io_funcs.py                   # Storage utilities
+│   ├── helpers.py                    # Utility functions
+│   └── prepare_data/                 # Data preparation module
+│       ├── config.py                 # Preparation config
+│       └── prepare.py                # Dataset processing
+├── main.py                            # Training entry point
+├── prepare_data.py                    # Data preparation entry point
+├── check_and_sync_data.py             # Data synchronization utility
+├── train.sh                           # Training wrapper script
+├── prepare_data.sh                    # Data prep wrapper script
+├── slurm_prepare_data_array.sh        # SLURM job array for parallel prep
+├── singularity/                       # Container definitions
+├── helper_scripts/                    # Cluster sync utilities
+├── PREPARE_DATA_VARIANTS.md           # Data preparation documentation
+└── CACHE_VARIANT_USAGE.md             # Cache variant selection guide
 ```
 
 ## Checkpointing

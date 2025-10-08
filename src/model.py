@@ -16,8 +16,6 @@ if DIFFLOGIC_AVAILABLE:
             super().__init__()
             logic_layers = []
 
-            llkw = dict(grad_factor=config.grad_factor, connections=config.connections)
-
             ####################################################################################################################
 
             logic_layers.append(torch.nn.Flatten())
@@ -134,7 +132,7 @@ def create_model(config: Config, input_shape: tuple, num_classes: int) -> nn.Mod
         model = CNN(model_config.cnn, input_shape, num_classes)
     elif model_config.model_type == "DiffLogic":
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
-        model = DiffLogic(config=model_config.diff_logic, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
+        model = DiffLogic(config=model_config.difflogic, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
     else:
         raise ValueError(f"Unknown model type: {model_config.model_type}")
 

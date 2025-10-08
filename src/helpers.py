@@ -20,11 +20,22 @@ def setup_seed(seed: int):
     logger.debug(f"Random seeds set to {seed}")
 
 
-def get_model_input_shape(data_config: config.DataConfig):
-    """Get input shape from sensor size (Note: SensorSizes are NHWC, but we use NCHW)"""
-    sensor_size = data.SensorSizes[data_config.name].value  # (H, W, C) format
+def get_model_input_shape(cfg: config.Config):
+    """Get input shape from sensor size accounting for downsampling
+
+    Note: SensorSizes are NHWC, but we use NCHW format
+    """
+    sensor_size = data.SensorSizes[cfg.data.name].value  # (H, W, C) format
+    height, width, channels = sensor_size
+
+    # Apply downsampling if configured
+    if cfg.data.downsample_pool_size:
+        height = height // cfg.data.downsample_pool_size
+        width = width // cfg.data.downsample_pool_size
+        logger.debug(f"Input shape adjusted for pooling size {cfg.data.downsample_pool_size}: ({channels}, {height}, {width})")
+
     # Convert to NCHW: (C, H, W)
-    return (sensor_size[2], sensor_size[0], sensor_size[1])
+    return (channels, height, width)
 
 
 def get_num_classes(data_config: config.DataConfig):

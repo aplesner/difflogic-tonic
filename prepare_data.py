@@ -49,9 +49,14 @@ Environment Variables:
     dataset_name = prep_config.name
 
     logger.info(f"Dataset: {dataset_name}")
-    logger.info(f"Events per frame: {prep_config.events_per_frame}")
+    logger.info(f"Frame mode: {prep_config.frame_mode}")
+    if prep_config.frame_mode == "event_count":
+        logger.info(f"Events per frame: {prep_config.events_per_frame}")
+    else:
+        logger.info(f"Time window: {prep_config.time_window} μs")
     logger.info(f"Overlap: {prep_config.overlap}")
     logger.info(f"Denoise time: {prep_config.denoise_time}")
+    logger.info(f"Cache identifier: {prep_config.get_cache_identifier()}")
     logger.info(f"Reset cache: {prep_config.reset_cache}")
     logger.info("")
 
@@ -66,8 +71,9 @@ Environment Variables:
 
 
     # Check if cache exists and reset_cache is False
-    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False)
-    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True)
+    cache_identifier = prep_config.get_cache_identifier()
+    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
+    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
 
     scratch_exists = Path(scratch_train_path).exists() and Path(scratch_test_path).exists()
     project_exists = Path(project_train_path).exists() and Path(project_test_path).exists()

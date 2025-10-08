@@ -13,11 +13,11 @@ data:
 
   # Preprocessing parameters
   events_per_frame: 20000   # Number of events per frame
-  overlap: 15000            # Overlap between consecutive frames
+  overlap: 0.75            # Overlap between consecutive frames
   denoise_time: 5000       # Denoise filter time in microseconds (0 to disable)
 
   # Processing settings (multiprocessing)
-  num_threads: 12           # Number of parallel processing threads
+  num_threads: 16           # Number of parallel processing threads
 
   # Dataset splitting (for CIFAR10DVS only, NMNIST has predefined splits)
   test_split: 0.2          # Fraction of data to use for testing (0.0 - 1.0)

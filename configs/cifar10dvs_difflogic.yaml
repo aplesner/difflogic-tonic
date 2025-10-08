@@ -10,6 +10,20 @@ base:
 data:
   name: CIFAR10DVS  # Options: NMNIST, CIFAR10DVS
 
+  # Specify which cached dataset variant to use (matches prepare_data output)
+  # Examples: "events_20000_overlap0_denoise5000", "time_10000_overlap0_denoise5000"
+  # Leave as null to use default cache (backward compatibility)
+  cache_identifier: null  # or "events_20000_overlap0_denoise5000"
+
+  # Input transforms
+  downsample_pool_size: 4  # Max pooling: 128x128 -> 64x64 (2), 128x128 -> 32x32 (4), null for no downsampling
+
+  # Data augmentation (applied only to training set)
+  augmentation:
+    horizontal_flip: false
+    vertical_flip: false
+    salt_pepper_noise: 0.20  # Probability [0.0-1.0] to flip random pixels (20% here)
+
 train:
   epochs: 10
   learning_rate: 1e-2
@@ -31,7 +45,7 @@ model:
   model_type: DiffLogic
   difflogic:
     architecture: "fully_connected"  # Options: fully_connected and convolutional (not implemented yet)
-    num_neurons: 4000
+    num_neurons: 32000
     num_layers: 4
     connections: "random"
     grad_factor: 1.0

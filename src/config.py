@@ -32,8 +32,18 @@ class BaseConfig(BaseModel):
         return v if v else "default"
 
 
+class AugmentationConfig(BaseModel):
+    """Configuration for data augmentation (applied only to training data)"""
+    horizontal_flip: bool = False
+    vertical_flip: bool = False
+    salt_pepper_noise: float = 0.0  # probability [0.0, 1.0] for flipping random pixels
+
+
 class DataConfig(BaseModel):
     name: str = "NMNIST"
+    cache_identifier: str | None = None  # Specify which cached variant to use (e.g., "events_20000_overlap0_denoise5000")
+    downsample_pool_size: int | None = None  # e.g., 2 for 2x2 max pooling, 4 for 4x4
+    augmentation: AugmentationConfig = AugmentationConfig()
 
 
 class DataLoaderConfig(BaseModel):

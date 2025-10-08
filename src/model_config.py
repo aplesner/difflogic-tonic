@@ -22,4 +22,4 @@ class ModelConfig(BaseModel):
     model_type: str = "MLP"
     mlp: MLPConfig = MLPConfig()
     cnn: CNNConfig = CNNConfig()
-    diff_logic: DiffLogicConfig = DiffLogicConfig()
+    difflogic: DiffLogicConfig = DiffLogicConfig()

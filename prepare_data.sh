@@ -21,11 +21,20 @@ echo "Config: $CONFIG_FILE"
 echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 echo ""
 
-# Add current directory to Python path for src/ imports
-export PYTHONPATH="${PYTHONPATH}:."
+# Use singularity if SINGULARITY_CONTAINER is set and bind the project and scratch directories
+if [ -n "$SINGULARITY_CONTAINER" ]; then
+    echo "Using Singularity container: $SINGULARITY_CONTAINER"
+    mkdir -p ${SCRATCH_STORAGE_DIR:-./scratch/}
 
-# Run data preparation
-python3 prepare_data.py "$CONFIG_FILE"
+    SINGULARITY_CMD="singularity exec --nv --bind $PROJECT_STORAGE_DIR,$SCRATCH_STORAGE_DIR $SINGULARITY_CONTAINER"
+    $SINGULARITY_CMD python3 prepare_data.py "$CONFIG_FILE"
+else
+    # Add current directory to Python path for src/ imports
+    export PYTHONPATH="${PYTHONPATH}:."
+
+    # Run data preparation
+    python3 prepare_data.py "$CONFIG_FILE"
+fi
 
 # Check return status
 if [ $? -ne 0 ]; then

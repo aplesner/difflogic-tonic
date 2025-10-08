@@ -13,7 +13,7 @@ data:
 
   # Preprocessing parameters
   events_per_frame: 1500   # Number of events per frame
-  overlap: 1000            # Overlap between consecutive frames
+  overlap: 0.66            # Overlap between consecutive frames
   denoise_time: 1200       # Denoise filter time in microseconds (0 to disable)
 
   # Processing settings (multiprocessing)

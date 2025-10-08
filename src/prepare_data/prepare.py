@@ -15,6 +15,23 @@ from ..io_funcs import save_data_splits
 
 logger = logging.getLogger(__name__)
 
+class SubsetDataset(torch.utils.data.Dataset):
+    """A subset of a dataset at specified indices.
+
+    Args:
+        dataset (torch.utils.data.Dataset): The whole Dataset.
+        indices (sequence): Indices in the whole set selected for subset.
+    """
+    def __init__(self, dataset, indices: list[int]) -> None:
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx: int):
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
 
 class TransformPolarities:
     """Transform polarities into binary representation."""
@@ -43,19 +60,32 @@ def process_dataset(dataset, transform, prep_config: PrepareDataConfig) -> torch
     """Process dataset using multiprocessing with picklable processor"""
     processor = DatasetProcessor(dataset, transform)
 
-    with Pool(prep_config.num_threads) as p:
+    if prep_config.num_threads < 1:
+        num_threads = os.cpu_count() or 1
+        logger.info(f"Using all available CPU threads: {num_threads}")
+    elif os.cpu_count() and prep_config.num_threads > os.cpu_count():  # type: ignore
+        logger.warning(f"Requested {prep_config.num_threads} threads but only {os.cpu_count()} are available.")
+        num_threads = os.cpu_count()
+    else:
+        num_threads = prep_config.num_threads
+    logger.info(f"Processing dataset with {num_threads} threads...")
+
+    with Pool(num_threads) as p:
         dataset_size = len(dataset)
-        # dataset_size = min(len(dataset), 10)
         results = list(
             tqdm.tqdm(
                 p.imap(
                     processor,
                     range(dataset_size),
-                    chunksize=2,
+                    chunksize=4,
                 ),
                 total=dataset_size,
             )
         )
+    # results = [
+    #     processor(i) for i in tqdm.tqdm(range(len(dataset)), desc="Processing data")
+    # ]
+
     data = torch.cat([torch.from_numpy(r[0]) for r in results])
     # each sample in results is turned into multiple frames, so we need to repeat the labels
     n_repeats: list[int] = [r[0].shape[0] for r in results]
@@ -76,22 +106,44 @@ def get_dataset(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.Tensor
     if dataset_name == "NMNIST":
         dataset_train = tonic.datasets.NMNIST(data_root, train=True)
         dataset_test = tonic.datasets.NMNIST(data_root, train=False)
-        dataset = None
         sensor_size = tonic.datasets.NMNIST.sensor_size
     elif dataset_name == "CIFAR10DVS":
         dataset = tonic.datasets.CIFAR10DVS(data_root)
-        dataset_train, dataset_test = None, None
+        # CIFAR10DVS does not have predefined train/test split so we need to split it ourselves now. the dataset is a list of tuple (events, label)
+        dataset_size = len(dataset)
+        indices = np.arange(dataset_size)
+        train_size = int((1 - prep_config.test_split) * dataset_size)
+        random_state = np.random.RandomState(prep_config.seed)
+        random_state.shuffle(indices)
+
+        dataset_train = SubsetDataset(dataset, indices[:train_size].tolist())
+        dataset_test = SubsetDataset(dataset, indices[train_size:].tolist())
+
+        print(f"Train size: {len(dataset_train)}, Test size: {len(dataset_test)}")
+
         sensor_size = tonic.datasets.CIFAR10DVS.sensor_size
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
     # Setup transforms
-    transforms = [
-        tonic_transforms.ToFrame(
+    # Configure ToFrame based on frame_mode
+    if prep_config.frame_mode == "event_count":
+        assert prep_config.events_per_frame is not None
+        to_frame = tonic_transforms.ToFrame(
             sensor_size=sensor_size,
             event_count=prep_config.events_per_frame,
-            overlap=prep_config.overlap,
-        ),
+            overlap=int(prep_config.overlap * prep_config.events_per_frame),
+        )
+    else:  # time_window
+        assert prep_config.time_window is not None
+        to_frame = tonic_transforms.ToFrame(
+            sensor_size=sensor_size,
+            time_window=prep_config.time_window,
+            overlap=int(prep_config.overlap * prep_config.time_window),
+        )
+
+    transforms = [
+        to_frame,
         TransformPolarities(),
     ]
     if prep_config.denoise_time:
@@ -100,30 +152,8 @@ def get_dataset(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.Tensor
     transform = tonic_transforms.Compose(transforms)  # type: ignore
 
     
-    if dataset is not None:
-        # Process the dataset and split into train/tests
-        dataset = process_dataset(dataset, transform, prep_config)
-        n = len(dataset)
-        split = int(prep_config.test_split * n)
-        dataset_train, dataset_test = torch.utils.data.random_split(
-            dataset,
-            [n - split, split],
-            generator=torch.Generator().manual_seed(prep_config.seed)
-        )
-        # Create TensorDatasets from the subsets
-        dataset_train = torch.utils.data.TensorDataset(
-            torch.stack([dataset_train[i][0] for i in range(len(dataset_train))]),
-            torch.tensor([dataset_train[i][1] for i in range(len(dataset_train))])
-        )
-        dataset_test = torch.utils.data.TensorDataset(
-            torch.stack([dataset_test[i][0] for i in range(len(dataset_test))]),
-            torch.tensor([dataset_test[i][1] for i in range(len(dataset_test))])
-        )
-
-    else:
-        # Datasets are already split. Process them separately
-        dataset_train = process_dataset(dataset_train, transform, prep_config)
-        dataset_test = process_dataset(dataset_test, transform, prep_config)
+    dataset_train = process_dataset(dataset_train, transform, prep_config)
+    dataset_test = process_dataset(dataset_test, transform, prep_config)
 
     return dataset_train, dataset_test
 
@@ -153,7 +183,8 @@ def prepare_dataset(prep_config: PrepareDataConfig):
         train_tensor=train_tensor,
         train_labels_tensor=train_labels_tensor,
         test_tensor=test_tensor,
-        test_labels_tensor=test_labels_tensor
+        test_labels_tensor=test_labels_tensor,
+        cache_identifier=prep_config.get_cache_identifier()
     )
 
     logger.info("Data preparation complete.")

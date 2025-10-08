@@ -1,0 +1,50 @@
+base:
+  seed: 42
+  job_id: "difflogic_events20k"
+  wandb:
+    entity: null
+    run_name: null
+    tags: ["cifar10dvs", "difflogic", "events_30k"]
+    notes: "Training with 30k events per frame"
+
+data:
+  name: CIFAR10DVS
+
+  # Use the 30k events per frame cached variant
+  cache_identifier: "events_30000_overlap0.75_denoise5000"
+
+  # Input transforms
+  downsample_pool_size: 4  # 128x128 -> 64x64
+
+  # Data augmentation (applied only to training set)
+  augmentation:
+    horizontal_flip: true
+    vertical_flip: false
+    salt_pepper_noise: 0.20
+
+train:
+  epochs: 10
+  learning_rate: 1e-2
+  log_interval: 250
+  debugging_steps: 1000
+  save_model: false
+  checkpoint_interval_minutes: 10.0
+  model_path: models/
+  device: cuda
+  dtype: float16
+  dataloader:
+    batch_size: 64
+    num_workers: 6
+    prefetch_factor: 5
+    pin_memory: true
+    shuffle_train: true
+
+model:
+  model_type: DiffLogic
+  difflogic:
+    architecture: "fully_connected"
+    num_neurons: 32000
+    num_layers: 4
+    connections: "random"
+    grad_factor: 1.0
+    tau: 10.0

@@ -65,11 +65,11 @@ def main():
     logger.info(f"Using device: {cfg.train.device}")
 
     # Get dataloaders
-    logger.info("Setting up dataloaders...")
+    logger.info(f"Setting up dataloaders...")
     train_dataloader, test_dataloader = data.get_dataloaders(cfg)
 
-    # Get model parameters
-    input_shape = helpers.get_model_input_shape(cfg.data)
+    # Get model parameters (accounting for transforms)
+    input_shape = helpers.get_model_input_shape(cfg)
     num_classes = helpers.get_num_classes(cfg.data)
     logger.info(f"Input shape: {input_shape}, Num classes: {num_classes}")
 

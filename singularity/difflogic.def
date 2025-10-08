@@ -38,9 +38,9 @@ Stage: build
         pandas \
         difflogic \
         wandb \
-        huggingface-hub \
         omegaconf \
-        datasets 
+        tonic \
+        aedat 
 
     ##################################################
     # Prepare artifacts
