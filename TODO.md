@@ -20,17 +20,17 @@ This file tracks tasks, improvements, and known issues for the DiffLogic Tonic p
 - [ ] 🟡 Add support for learning rate schedulers
 - [ ] 🟡 Implement early stopping mechanism
 - [ ] 🟢 Add gradient clipping options
-- [ ] 🟢 Support for mixed precision training optimization
+- [✅] 🟢 Support for mixed precision training optimization
 - [ ] 🟢 Add validation metrics tracking (F1, precision, recall)
 - [ ] 🟡 Implement IWP variant
 - [ ] 🟡 Implement CLGNs
 
 #### Models
 - [ ] 🟡 Implement additional baseline models
-- [ ] 🟡 Discretize difflogic models
+- [✅] 🟡 Discretize difflogic models
 
 #### Data Processing
-- [🚧] 🔴 Do the test/train split before processing the samples.
+- [✅] 🔴 Do the test/train split before processing the samples.
 - [ ] 🟡 Add support for additional neuromorphic datasets (DVS-Gesture, N-Caltech101)
 - [ ] 🟢 Add dataset statistics and visualization tools
 
@@ -53,9 +53,6 @@ This file tracks tasks, improvements, and known issues for the DiffLogic Tonic p
 
 ### Code Quality
 
-- [ ] 🟡 Add type hints throughout codebase
-- [ ] 🟡 Implement linting configuration (pylint, flake8, black)
-- [ ] 🟢 Refactor large functions into smaller units
 - [ ] 🟢 Add docstrings to all public functions and classes
 
 ---
