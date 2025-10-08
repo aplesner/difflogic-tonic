@@ -36,29 +36,30 @@ def train_step(
     if data.dtype == torch.bool:
         data = data.float()
 
-    data, targets = data.to(device, dtype=dtype), targets.to(device)
+    data, targets = data.to(device), targets.to(device)
+    device_type = device.type if device.type != 'mps' else 'cpu'
 
+    with torch.autocast(device_type=device_type, dtype=dtype):
+        outputs = model(data)
+        loss = criterion(outputs, targets)
     optimizer.zero_grad()
-    outputs = model(data)
-    loss = criterion(outputs, targets)
     loss.backward()
     optimizer.step()
 
     # get sample accuracy
-    _, accuracy = get_correct_and_accuracy(outputs, targets)
+    correct, accuracy = get_correct_and_accuracy(outputs, targets)
 
     if config.base.debug:# and batch_idx % config.train.log_interval == 0:
         # print data, target and output stats for debugging
-        logger.debug(f"Batch {batch_idx}:")
-        print(targets.cpu().numpy().tolist())
-        # print the output tensor as indices of the max logits
-        print(outputs.argmax(dim=1).cpu().numpy().tolist())
+        # logger.debug(f"Batch {batch_idx}:")
+        # print(targets.cpu().numpy().tolist())
+        # # print the output tensor as indices of the max logits
+        # print(outputs.argmax(dim=1).cpu().numpy().tolist())
         
         logger.debug(f"  Loss: {loss.item():.4f}, Accuracy: {accuracy*100:.2f}%")
         # Uncomment the following line to log output tensor details
-    #     logger.debug(f"Device, dtype and shape of outputs: {outputs.device}, {outputs.dtype}, {outputs.shape}")
 
-    return loss.item(), accuracy
+    return loss.item(), correct, accuracy
 
 
 def train_epoch(
@@ -70,7 +71,7 @@ def train_epoch(
         config: config.Config, 
         start_time: float, 
         last_checkpoint_time: float
-    ) -> tuple[float, int, float]:
+    ) -> tuple[float, float, int, float]:
     """Train for one epoch"""
     model.train()
     total_loss = 0.0
@@ -79,55 +80,62 @@ def train_epoch(
     device = config.train.device if isinstance(config.train.device, torch.device) else torch.device(config.train.device)
     dtype = config.train.dtype if isinstance(config.train.dtype, torch.dtype) else getattr(torch, config.train.dtype)
 
-    with torch.autocast(device.type if device.type != 'mps' else 'cpu', dtype=dtype):
-        for batch_idx, batch in enumerate(dataloader):
-            loss, accuracy = train_step(
-                model=model, batch=batch, criterion=criterion, optimizer=optimizer, config=config, batch_idx=batch_idx, device=device, dtype=dtype
-            )
-            total_loss += loss
-            batch_count += 1
+    correct, total_samples = 0, 0
 
-            # Time-based checkpointing
-            current_time = time.time()
-            if current_time - last_checkpoint_time >= checkpoint_interval_seconds:
-                elapsed_time = current_time - start_time
-                logger.info(f"Batch {batch_count}, Loss: {loss:.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
-                io_funcs.save_checkpoint(model=model, optimizer=optimizer, batch_count=batch_count, config=config, job_id=config.base.job_id, elapsed_time=elapsed_time)
-                last_checkpoint_time = current_time
+    for batch_idx, batch in enumerate(dataloader):
+        loss, batch_correct, accuracy = train_step(
+            model=model, batch=batch, criterion=criterion, optimizer=optimizer, config=config, batch_idx=batch_idx, device=device, dtype=dtype
+        )
+        batch_size = batch[0].shape[0]
+        total_loss += loss
+        correct += batch_correct
+        total_samples += batch_size
 
-            if batch_idx % config.train.log_interval == 0:
-                logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {100 * accuracy:.2f}%")
+        # Time-based checkpointing
+        current_time = time.time()
+        if current_time - last_checkpoint_time >= checkpoint_interval_seconds:
+            elapsed_time = current_time - start_time
+            logger.info(f"Batch {batch_count}, Loss: {loss:.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
+            io_funcs.save_checkpoint(model=model, optimizer=optimizer, batch_count=batch_count, config=config, job_id=config.base.job_id, elapsed_time=elapsed_time)
+            last_checkpoint_time = current_time
 
-            if config.base.debug and batch_idx >= config.train.debugging_steps:
-                break  # For debugging, limit to specified batches per epoch
+        if batch_idx % config.train.log_interval == 0:
+            logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {100 * accuracy:.2f}%")
 
-    return total_loss / len(dataloader), batch_count, last_checkpoint_time
+        if config.base.debug and batch_idx >= config.train.debugging_steps:
+            break  # For debugging, limit to specified batches per epoch
+    batch_count += total_samples
+    accuracy = 100. * correct / total_samples if total_samples > 0 else 0.
+    loss_per_sample = total_loss / total_samples if total_samples > 0 else 0.
+    return loss_per_sample, accuracy, batch_count, last_checkpoint_time
 
 
 def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module, config: config.Config) -> tuple[float, float]:
     """Evaluate model"""
     model.eval()
     total_loss = 0.0
-    corrects, total = 0, 0
+    corrects, total_samples = 0, 0
     dtype = config.train.dtype if isinstance(config.train.dtype, torch.dtype) else getattr(torch, config.train.dtype)
     device = config.train.device if isinstance(config.train.device, torch.device) else torch.device(config.train.device)
 
-    with torch.no_grad(), torch.autocast(device.type if device.type != 'mps' else 'cpu'):
-        for data_batch, targets in dataloader:
-            # Convert boolean data to float if necessary
-            if data_batch.dtype == torch.bool:
-                data_batch = data_batch.float()
+    device_type = device.type if device.type != 'mps' else 'cpu'
 
-            data_batch, targets = data_batch.to(device, dtype=dtype), targets.to(device)
+    for data_batch, targets in dataloader:
+        # Convert boolean data to float if necessary
+        if data_batch.dtype == torch.bool:
+            data_batch = data_batch.float()
+
+        data_batch, targets = data_batch.to(device), targets.to(device)
+        with torch.no_grad(), torch.autocast(device_type=device_type, dtype=dtype):
             outputs = model(data_batch)
             loss = criterion(outputs, targets)
 
-            total_loss += loss.item()
-            correct, _ = get_correct_and_accuracy(outputs, targets)
-            corrects += correct
-            total += targets.size(0)
+        total_loss += loss.item()
+        correct, _ = get_correct_and_accuracy(outputs, targets)
+        corrects += correct
+        total_samples += targets.size(0)
 
-    accuracy = 100. * corrects / total
-    avg_loss = total_loss / len(dataloader)
+    accuracy = 100. * corrects / total_samples if total_samples > 0 else 0
+    avg_loss = total_loss / total_samples if total_samples > 0 else 0
 
     return avg_loss, accuracy

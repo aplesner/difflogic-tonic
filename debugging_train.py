@@ -10,12 +10,15 @@ Usage:
     python3 minimal_test.py
 """
 
+import time
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from pathlib import Path
 
+from src import train as src_train, model as src_model, config as src_config, model_config as src_model_config
 
 class SimpleMLP(nn.Module):
     """Simple 2-layer MLP for testing"""
@@ -75,18 +78,27 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch):
     correct = 0
     total = 0
 
+    config = src_config.Config()
+
     for batch_idx, (data, target) in enumerate(dataloader):
-        data, target = data.to(device), target.to(device)
 
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
+        loss, accuracy = src_train.train_step(model=model, batch=(data, target), criterion=criterion,
+                             optimizer=optimizer, config=config, batch_idx=batch_idx, device=device, dtype=torch.float32)
 
-        total_loss += loss.item()
-        pred = output.argmax(dim=1)
-        correct += (pred == target).sum().item()
+        # data, target = data.to(device), target.to(device)
+
+        # optimizer.zero_grad()
+        # output = model(data)
+        # loss = criterion(output, target)
+        # loss.backward()
+        # optimizer.step()
+
+        # total_loss += loss.item()
+        # pred = output.argmax(dim=1)
+        # correct += (pred == target).sum().item()
+        # total += target.size(0)
+        total_loss += loss
+        correct += int(accuracy * target.size(0))
         total += target.size(0)
 
         if batch_idx % 250 == 0:
@@ -98,6 +110,41 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch):
     accuracy = 100. * correct / total
     avg_loss = total_loss / len(dataloader)
     return avg_loss, accuracy
+
+def train_epoch_2(
+        model: nn.Module, 
+        dataloader: DataLoader, 
+        criterion: nn.Module, 
+        optimizer: optim.Optimizer, 
+        batch_count: int, 
+    ) -> tuple[float, int, float]:
+    """Train for one epoch"""
+    model.train()
+    total_loss = 0.0
+    # device = model.parameters().__next__().device
+    dtype = torch.float16
+    config = src_config.Config()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    correct = 0
+    total = 0
+
+    print(f"  Training on device: {device}, dtype: {dtype}")
+
+    for batch_idx, batch in enumerate(dataloader):
+        loss, batch_correct, accuracy = src_train.train_step(
+            model=model, batch=batch, criterion=criterion, optimizer=optimizer, config=config, batch_idx=batch_idx, device=device, dtype=dtype
+        )
+        total_loss += loss
+        batch_count += 1
+        correct += batch_correct
+        total += batch[0].size(0)
+
+        if batch_idx % config.train.log_interval == 0:
+            print(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {100 * accuracy:.2f}%")
+
+    accuracy = 100. * correct / total if total > 0 else 0
+
+    return total_loss / len(dataloader), batch_count, accuracy
 
 
 def evaluate(model, dataloader, criterion, device):
@@ -159,17 +206,25 @@ def main():
     print()
 
     # Create model
-    model = SimpleMLP(input_size, hidden_size, num_classes).to(device)
+    config = src_config.Config()
+    mlp_config = src_model_config.MLPConfig(hidden_size=hidden_size, num_hidden_layers=1)
+    model = src_model.MLP(config=mlp_config, input_size=input_size, num_classes=num_classes).to(device)
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # Training loop
     print("Starting training...")
     print()
-
+    batch_count = 0
+    # config.train.dtype = torch.float32  # Use float32 for this test
     for epoch in range(1, num_epochs + 1):
-        train_loss, train_acc = train_epoch(
-            model, train_loader, criterion, optimizer, device, epoch
+        # train_loss, train_acc = train_epoch(
+        #     model, train_loader, criterion, optimizer, device, epoch
+        # )
+        train_loss, batch_count, train_acc = train_epoch_2(
+            model=model, dataloader=train_loader, criterion=criterion, 
+            optimizer=optimizer, batch_count=batch_count, 
         )
         test_loss, test_acc = evaluate(model, test_loader, criterion, device)
 

@@ -112,7 +112,7 @@ def main():
         logger.info(f"\nEpoch {epoch + 1}/{cfg.train.epochs}")
 
         # Train
-        train_loss, batch_count, last_checkpoint_time = train.train_epoch(
+        train_loss_per_sample, train_accuracy, batch_count, last_checkpoint_time = train.train_epoch(
             model=net,
             dataloader=train_dataloader,
             criterion=criterion,
@@ -124,14 +124,14 @@ def main():
         )
 
         # Evaluate
-        test_loss, test_acc = train.evaluate(
+        test_loss, test_accuracy = train.evaluate(
             model=net,
             dataloader=test_dataloader,
             criterion=criterion,
             config=cfg
         )
 
-        logger.info(f"Epoch {epoch + 1} - Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")
+        logger.info(f"Epoch {epoch + 1} - Train Loss: {train_loss_per_sample:.4f}, Train Acc: {train_accuracy:.2f}%, Test Loss: {test_loss:.4f}, Test Acc: {test_accuracy:.2f}%")
 
     # Save final checkpoint
     if cfg.train.save_model:

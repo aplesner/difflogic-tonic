@@ -58,6 +58,7 @@ venv.bak/
 *.zip
 project_storage/*
 scratch/
+data/
 
 # PyTorch Lightning
 lightning_logs/
