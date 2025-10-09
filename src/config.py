@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger()
 
 from omegaconf import OmegaConf
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 import torch
 
 from .model_config import ModelConfig
@@ -34,9 +34,15 @@ class BaseConfig(BaseModel):
 
 class AugmentationConfig(BaseModel):
     """Configuration for data augmentation (applied only to training data)"""
-    horizontal_flip: bool = False
-    vertical_flip: bool = False
-    salt_pepper_noise: float = 0.0  # probability [0.0, 1.0] for flipping random pixels
+    # Flip augmentations
+    horizontal_flip_probability: float = Field(default=0.0, ge=0.0, le=1.0)  # probability for horizontal flip
+    vertical_flip_probability: float = Field(default=0.0, ge=0.0, le=1.0)  # probability for vertical flip
+
+    # Crop augmentation
+    random_crop_padding: int = 0  # padding for random crop (0 = disabled)
+
+    # Noise augmentation (custom for spike data)
+    salt_pepper_noise: float = Field(default=0.0, ge=0.0, le=1.0)  # probability [0.0, 1.0] for flipping random pixels
 
 
 class DataConfig(BaseModel):

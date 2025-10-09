@@ -18,16 +18,16 @@ mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
 
 # Configuration files for each array task
 CONFIG_FILES=(
-    "configs/prepare_cifar10dvs_events_5k.yaml"
-    "configs/prepare_cifar10dvs_events_10k.yaml"
-    "configs/prepare_cifar10dvs_events_20k.yaml"
-    "configs/prepare_cifar10dvs_events_30k.yaml"
-    "configs/prepare_cifar10dvs_events_50k.yaml"
-    # "configs/prepare_cifar10dvs_time_5ms.yaml"
-    # "configs/prepare_cifar10dvs_time_10ms.yaml"
-    # "configs/prepare_cifar10dvs_time_20ms.yaml"
-    # "configs/prepare_cifar10dvs_time_50ms.yaml"
-    # "configs/prepare_cifar10dvs_time_100ms.yaml"
+    "configs/prepare_data/cifar10dvs_events_5k.yaml"
+    "configs/prepare_data/cifar10dvs_events_10k.yaml"
+    "configs/prepare_data/cifar10dvs_events_20k.yaml"
+    "configs/prepare_data/cifar10dvs_events_30k.yaml"
+    "configs/prepare_data/cifar10dvs_events_50k.yaml"
+    # "configs/prepare_data/cifar10dvs_time_5ms.yaml"
+    # "configs/prepare_data/cifar10dvs_time_10ms.yaml"
+    # "configs/prepare_data/cifar10dvs_time_20ms.yaml"
+    # "configs/prepare_data/cifar10dvs_time_50ms.yaml"
+    # "configs/prepare_data/cifar10dvs_time_100ms.yaml"
 )
 
 # Select config file based on array task ID (1-indexed)

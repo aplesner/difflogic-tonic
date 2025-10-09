@@ -18,9 +18,10 @@ data:
 
   # Data augmentation (applied only to training set)
   augmentation:
-    horizontal_flip: true
-    vertical_flip: false
-    salt_pepper_noise: 0.20
+    horizontal_flip_probability: 0.5  # Probability [0.0-1.0] for horizontal flip
+    vertical_flip_probability: 0.0  # Probability [0.0-1.0] for vertical flip (0 = disabled)
+    random_crop_padding: 0  # Padding for random crop (0 = disabled)
+    salt_pepper_noise: 0.20  # Probability [0.0-1.0] to flip random pixels
 
 train:
   epochs: 10

@@ -10,10 +10,13 @@ This keeps training dependencies lightweight and makes the workflow explicit:
 
 import enum
 import logging
+from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from torchvision.transforms import v2
+
 
 from . import config
 from .io_funcs import get_data_splits
@@ -22,61 +25,25 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# Transform Classes
+# Custom Transform Classes
 # ============================================================================
 
-class DownsampleTransform:
-    """Apply max pooling downsampling to input tensors"""
-    def __init__(self, pool_size: int):
-        self.pool = nn.MaxPool2d(kernel_size=pool_size, stride=pool_size)
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply max pooling to single sample (C, H, W)"""
-        # Convert boolean to float if necessary (max pooling doesn't support bool)
-        if x.dtype == torch.bool:
-            x = x.float()
-        return self.pool(x.unsqueeze(0)).squeeze(0)
-
-
 class SaltPepperNoise:
-    """Add salt and pepper noise by flipping random binary pixels"""
+    """Add salt and pepper noise by flipping random binary pixels
+
+    This is a custom transform for binary spike data that isn't available in torchvision.
+    Uses v2.ToDtype for dtype conversion when needed.
+    """
     def __init__(self, probability: float):
         self.probability = probability
+        self.to_float = v2.ToDtype(torch.float32, scale=False)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         """Flip random pixels with given probability"""
         if self.probability > 0:
-            if x.dtype == torch.bool:
-                x = x.float()  # Convert to float for noise addition
-            mask = torch.rand_like(x) < self.probability
+            mask = torch.rand(x.shape) < self.probability
             # Flip pixels: 0 -> 1, 1 -> 0 (works for binary and float data)
             x = torch.where(mask, 1.0 - x, x)
-        return x
-
-
-class RandomFlip:
-    """Apply random horizontal and/or vertical flips"""
-    def __init__(self, horizontal: bool = False, vertical: bool = False):
-        self.horizontal = horizontal
-        self.vertical = vertical
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply random flips to single sample (C, H, W)"""
-        if self.horizontal and torch.rand(1).item() > 0.5:
-            x = torch.flip(x, dims=[2])  # flip width dimension
-        if self.vertical and torch.rand(1).item() > 0.5:
-            x = torch.flip(x, dims=[1])  # flip height dimension
-        return x
-
-
-class ComposeTransforms:
-    """Compose multiple transforms together"""
-    def __init__(self, transforms: list):
-        self.transforms = transforms
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        for transform in self.transforms:
-            x = transform(x)
         return x
 
 
@@ -150,38 +117,66 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
 
     train_dataset = torch.utils.data.TensorDataset(train_cache['data'], train_cache['labels'])
     test_dataset = torch.utils.data.TensorDataset(test_cache['data'], test_cache['labels'])
-
-    # Build transform pipelines
-    train_transforms = []
-    test_transforms = []
+    # Build transform pipelines using torchvision.transforms.v2
+    train_transforms: list[Any] = [
+        v2.ToDtype(torch.float32, scale=False)  # Convert bool to float32 for transforms
+    ]
+    test_transforms: list[Any] = [
+        v2.ToDtype(torch.float32, scale=False)  # Convert bool to float32 for transforms
+    ]
 
     # Downsampling (applied to both train and test)
     if cfg.data.downsample_pool_size:
         logger.info(f"Adding max pooling downsampling with pool size {cfg.data.downsample_pool_size}")
-        downsample = DownsampleTransform(cfg.data.downsample_pool_size)
+        downsample = nn.MaxPool2d(kernel_size=cfg.data.downsample_pool_size, stride=cfg.data.downsample_pool_size)
         train_transforms.append(downsample)
         test_transforms.append(downsample)
 
-    # Augmentation (only for training)
+    # Augmentation (only for training) - uses torchvision.transforms.v2
     aug_config = cfg.data.augmentation
-    if aug_config.horizontal_flip or aug_config.vertical_flip:
-        logger.info(f"Adding random flips: horizontal={aug_config.horizontal_flip}, vertical={aug_config.vertical_flip}")
-        train_transforms.append(RandomFlip(
-            horizontal=aug_config.horizontal_flip,
-            vertical=aug_config.vertical_flip
-        ))
 
-    if aug_config.salt_pepper_noise > 0:
+    # Random crop with padding
+    if aug_config.random_crop_padding > 0:
+        # Get the spatial dimensions after any downsampling
+        sample_data = train_cache['data'][0]
+        _, h, w = sample_data.shape
+        if cfg.data.downsample_pool_size:
+            h = h // cfg.data.downsample_pool_size
+            w = w // cfg.data.downsample_pool_size
+        logger.info(f"Adding random crop with padding {aug_config.random_crop_padding} (output size: {h}x{w})")
+        train_transforms.append(v2.RandomCrop(size=(h, w), padding=aug_config.random_crop_padding))
+
+    # Random flips
+    if aug_config.horizontal_flip_probability:
+        logger.info(f"Adding random horizontal flip (p={aug_config.horizontal_flip_probability})")
+        train_transforms.append(v2.RandomHorizontalFlip(p=aug_config.horizontal_flip_probability))
+
+    if aug_config.vertical_flip_probability:
+        logger.info(f"Adding random vertical flip (p={aug_config.vertical_flip_probability})")
+        train_transforms.append(v2.RandomVerticalFlip(p=aug_config.vertical_flip_probability))
+
+    # Custom noise augmentation for spike data
+    if aug_config.salt_pepper_noise:
         logger.info(f"Adding salt & pepper noise with probability {aug_config.salt_pepper_noise}")
         train_transforms.append(SaltPepperNoise(aug_config.salt_pepper_noise))
 
-    # Wrap datasets with transforms if any
+    # Additional torchvision transforms can be easily added here:
+    # Examples (uncomment and configure as needed):
+    # train_transforms.append(v2.RandomRotation(degrees=15))
+    # train_transforms.append(v2.RandomAffine(degrees=0, translate=(0.1, 0.1)))
+    # train_transforms.append(v2.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)))
+    # train_transforms.append(v2.RandomErasing(p=0.5, scale=(0.02, 0.33)))
+    # train_transforms.append(v2.ColorJitter(brightness=0.2, contrast=0.2))
+    # train_transforms.append(v2.RandomPerspective(distortion_scale=0.2, p=0.5))
+    # train_transforms.append(v2.ElasticTransform(alpha=50.0))
+
+    # Wrap datasets with transforms if any - uses torchvision.transforms.v2.Compose
     if train_transforms:
-        train_transform = ComposeTransforms(train_transforms)
+        train_transform = v2.Compose(train_transforms)
         train_dataset = TransformedTensorDataset(train_dataset, train_transform)
 
     if test_transforms:
-        test_transform = ComposeTransforms(test_transforms)
+        test_transform = v2.Compose(test_transforms)
         test_dataset = TransformedTensorDataset(test_dataset, test_transform)
 
     # Create dataloaders with training config
