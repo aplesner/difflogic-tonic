@@ -2,6 +2,7 @@ import os
 import logging
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Any
 
 
 import numpy as np
@@ -82,9 +83,6 @@ def process_dataset(dataset, transform, prep_config: PrepareDataConfig) -> torch
                 total=dataset_size,
             )
         )
-    # results = [
-    #     processor(i) for i in tqdm.tqdm(range(len(dataset)), desc="Processing data")
-    # ]
 
     data = torch.cat([torch.from_numpy(r[0]) for r in results])
     # each sample in results is turned into multiple frames, so we need to repeat the labels
@@ -93,11 +91,18 @@ def process_dataset(dataset, transform, prep_config: PrepareDataConfig) -> torch
     return torch.utils.data.TensorDataset(data, labels)
 
 
-def get_dataset(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.TensorDataset, torch.utils.data.TensorDataset]:
-    """Load and preprocess raw dataset with tonic
+def get_raw_datasets_with_split(prep_config: PrepareDataConfig) -> tuple[Any, Any, tuple]:
+    """Load raw datasets and apply train/test split WITHOUT any transforms
+
+    This function is shared by both prepare.py and extract_metadata.py to ensure
+    identical train/test splits.
+
+    Args:
+        prep_config: Preparation configuration
 
     Returns:
-        Tuple of (train_dataset, test_dataset) wrapped with transforms
+        Tuple of (dataset_train, dataset_test, sensor_size)
+        Datasets contain raw events, no transforms applied
     """
     dataset_name = prep_config.name
     data_root = prep_config.data_root
@@ -119,13 +124,25 @@ def get_dataset(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.Tensor
         dataset_train = SubsetDataset(dataset, indices[:train_size].tolist())
         dataset_test = SubsetDataset(dataset, indices[train_size:].tolist())
 
-        print(f"Train size: {len(dataset_train)}, Test size: {len(dataset_test)}")
+        logger.info(f"Train size: {len(dataset_train)}, Test size: {len(dataset_test)}")
 
         sensor_size = tonic.datasets.CIFAR10DVS.sensor_size
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-    # Setup transforms
+    return dataset_train, dataset_test, sensor_size
+
+
+def create_transform(prep_config: PrepareDataConfig, sensor_size: tuple):
+    """Create transform pipeline for converting events to frames
+
+    Args:
+        prep_config: Preparation configuration
+        sensor_size: Sensor size tuple (H, W, C)
+
+    Returns:
+        Composed transform (Denoise + ToFrame + TransformPolarities)
+    """
     # Configure ToFrame based on frame_mode
     if prep_config.frame_mode == "event_count":
         assert prep_config.events_per_frame is not None
@@ -149,9 +166,22 @@ def get_dataset(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.Tensor
     if prep_config.denoise_time:
         transforms = [tonic_transforms.Denoise(filter_time=prep_config.denoise_time)] + transforms
 
-    transform = tonic_transforms.Compose(transforms)  # type: ignore
+    return tonic_transforms.Compose(transforms)  # type: ignore
 
-    
+
+def get_datasets(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.TensorDataset, torch.utils.data.TensorDataset]:
+    """Load and preprocess raw dataset with tonic
+
+    Returns:
+        Tuple of (train_dataset, test_dataset) wrapped with transforms
+    """
+    # Get raw datasets with correct split (shared logic)
+    dataset_train, dataset_test, sensor_size = get_raw_datasets_with_split(prep_config)
+
+    # Create transform pipeline
+    transform = create_transform(prep_config, sensor_size)
+
+    # Process datasets with transforms
     dataset_train = process_dataset(dataset_train, transform, prep_config)
     dataset_test = process_dataset(dataset_test, transform, prep_config)
 
@@ -167,7 +197,7 @@ def prepare_dataset(prep_config: PrepareDataConfig):
     logger.info(f"Preparing dataset: {dataset_name}")
 
     # Get original datasets
-    dataset_train, dataset_test = get_dataset(prep_config)
+    dataset_train, dataset_test = get_datasets(prep_config)
 
     # Convert to tensors
     train_tensor, train_labels_tensor = dataset_train.tensors

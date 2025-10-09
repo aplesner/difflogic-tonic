@@ -275,3 +275,65 @@ def copy_final_checkpoint(job_id: str, project_storage_path: str):
     else:
         logger.warning(f"Source checkpoint not found: {src}")
 
+
+# Metadata I/O functions
+def get_metadata_path(dataset_name: str, cache_identifier: str) -> Path:
+    """Get path for metadata file
+
+    Args:
+        dataset_name: Name of dataset (e.g., "NMNIST", "CIFAR10DVS")
+        cache_identifier: Cache identifier string (e.g., "events_20000_overlap0.75_denoise5000")
+
+    Returns:
+        Path to metadata JSON file
+    """
+    metadata_dir = get_project_storage_dir() / 'metadata'
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    return metadata_dir / f"{dataset_name}_{cache_identifier}_metadata.json"
+
+
+def load_metadata(dataset_name: str, cache_identifier: str) -> dict | None:
+    """Load metadata from JSON file
+
+    Args:
+        dataset_name: Name of dataset
+        cache_identifier: Cache identifier string
+
+    Returns:
+        Metadata dictionary or None if file doesn't exist
+    """
+    import json
+
+    metadata_path = get_metadata_path(dataset_name, cache_identifier)
+
+    if not metadata_path.exists():
+        logger.warning(f"Metadata file not found: {metadata_path}")
+        return None
+
+    with open(metadata_path, 'r') as f:
+        metadata = json.load(f)
+
+    logger.info(f"Metadata loaded from: {metadata_path}")
+    return metadata
+
+
+def discover_metadata_files() -> dict[str, Path]:
+    """Discover all metadata files in the metadata directory
+
+    Returns:
+        Dictionary mapping cache identifiers to file paths
+    """
+    metadata_dir = get_project_storage_dir() / 'metadata'
+
+    if not metadata_dir.exists():
+        return {}
+
+    metadata_files = {}
+    for file_path in metadata_dir.glob('*_metadata.json'):
+        # Extract identifier from filename (remove dataset name and _metadata.json)
+        # Format: DATASET_IDENTIFIER_metadata.json
+        filename = file_path.stem.replace('_metadata', '')
+        metadata_files[filename] = file_path
+
+    return metadata_files
+
