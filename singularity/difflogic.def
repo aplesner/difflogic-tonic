@@ -40,7 +40,13 @@ Stage: build
         wandb \
         omegaconf \
         tonic \
-        aedat 
+        aedat \
+        lightning \
+        jupyterlab \
+        ipywidgets \
+        notebook \
+        ipykernel \
+        pydantic 
 
     ##################################################
     # Prepare artifacts
