@@ -1,0 +1,19 @@
+# Layered feedforward model configuration
+name: LayeredFeedForward
+
+# Model parameters
+params:
+  # Encoder configuration (if model handles encoding internally)
+  encoder:
+    name: thermometer
+    parameters:
+      num_bits: 3
+      feature_wise: true
+  
+  # Layer configuration (flattened for easier Hydra overrides)
+  layer_type: random  # Layer type: random, adaptive, learnable
+  hidden_sizes: [500, 500]  # Two layers with 500 nodes each
+  node_type: fourier  # Node type: dwn, linear_lut, neurallut, polylut, probabilistic, unbound_probabilistic,fourier,fourier_hermitian,hybrid
+  num_inputs: 6  # n - number of LUT inputs
+  
+

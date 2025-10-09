@@ -9,6 +9,7 @@ import torch.nn as nn
 
 from .config import Config
 from .model_config import MLPConfig, CNNConfig, DiffLogicConfig
+from .difflut_model import DiffLUTConfig, DiffLUTModel
 
 if DIFFLOGIC_AVAILABLE:
     class DiffLogic(nn.Module):
@@ -133,6 +134,20 @@ def create_model(config: Config, input_shape: tuple, num_classes: int) -> nn.Mod
     elif model_config.model_type == "DiffLogic":
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
         model = DiffLogic(config=model_config.difflogic, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
+    elif model_config.model_type == "DiffLUT":
+        input_size = input_shape[0] * input_shape[1] * input_shape[2]
+
+        # the format does not match perfectly since it was designed to be used as a factory for multiple models with different input sizes
+        model = DiffLUTConfig(
+            nodetypes=model_config.nodetypes,
+            layertypes=model_config.layertypes,
+            n=model_config.n,
+            num_layers=model_config.num_layers,
+            default_layer=model_config.default_layer,
+            default_node=model_config.default_node,
+            default_hidden_size=model_config.default_hidden_size,
+            layer_overrides=model_config.layer_overrides,
+        ).create(input_size, num_classes, torch.device(config.train.device))
     else:
         raise ValueError(f"Unknown model type: {model_config.model_type}")
 
