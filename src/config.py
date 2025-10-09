@@ -60,6 +60,36 @@ class DataLoaderConfig(BaseModel):
     shuffle_train: bool = True
 
 
+class SchedulerConfig(BaseModel):
+    """Learning rate scheduler configuration"""
+    enabled: bool = False
+    type: str = "step"  # options: step, cosine, reduce_on_plateau
+    step_size: int = 10  # for step scheduler
+    gamma: float = 0.1  # for step scheduler
+    min_lr: float = 1e-6  # for cosine and reduce_on_plateau
+    factor: float = 0.5  # for reduce_on_plateau
+    patience: int = 5  # for reduce_on_plateau
+
+
+class EarlyStoppingConfig(BaseModel):
+    """Early stopping configuration"""
+    enabled: bool = False
+    monitor: str = "val/acc"  # metric to monitor
+    patience: int = 10  # number of epochs with no improvement
+    mode: str = "max"  # max for accuracy, min for loss
+    min_delta: float = 0.0  # minimum change to qualify as improvement
+
+
+class LightningConfig(BaseModel):
+    """PyTorch Lightning trainer configuration"""
+    enable_progress_bar: bool = True
+    log_every_n_steps: int = 50
+    gradient_clip_val: float | None = None  # gradient clipping value (None = disabled)
+    accumulate_grad_batches: int = 1  # gradient accumulation
+    check_val_every_n_epoch: int = 1  # validation frequency
+    num_sanity_val_steps: int = 2  # sanity check validation steps before training
+
+
 class TrainConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
@@ -68,11 +98,14 @@ class TrainConfig(BaseModel):
     log_interval: int = 250
     debugging_steps: int = 10
     save_model: bool = False
-    checkpoint_interval_minutes: float = 10.0  # time-based checkpointing
+    checkpoint_interval_minutes: float = 10.0  # time-based checkpointing (deprecated with Lightning)
     model_path: str = "models/"
     device: str | torch.device = "cuda"
     dtype: str | torch.dtype = "float16"  # options: float16, bfloat16, float32
     dataloader: DataLoaderConfig = DataLoaderConfig()
+    scheduler: SchedulerConfig = SchedulerConfig()
+    early_stopping: EarlyStoppingConfig = EarlyStoppingConfig()
+    lightning: LightningConfig = LightningConfig()
 
     @field_validator('model_path')
     @classmethod

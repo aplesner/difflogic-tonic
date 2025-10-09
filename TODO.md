@@ -32,6 +32,7 @@ This file tracks tasks, improvements, and known issues for the DiffLogic Tonic p
 #### Data Processing
 - [✅] 🔴 Do the test/train split before processing the samples.
 - [ ] 🟡 Add support for additional neuromorphic datasets (DVS-Gesture, N-Caltech101)
+- [ ] 🟡 Include metadata in the pipeline to get the duration of each of the generated frames
 - [ ] 🟢 Add dataset statistics and visualization tools
 
 #### Checkpointing & Resume

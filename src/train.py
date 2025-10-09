@@ -28,8 +28,11 @@ def train_step(
         batch_idx: int,
         device: torch.device,
         dtype: torch.dtype = torch.float16,
-    ) -> tuple[float, float]:
-    """Perform a single training step"""
+    ) -> tuple[torch.Tensor, int, torch.Tensor]:
+    """Perform a single training step
+
+    Note: Returns tensors with .detach() instead of .item() for better performance
+    """
     data, targets = batch
 
     # Convert boolean data to float if necessary
@@ -49,30 +52,33 @@ def train_step(
     # get sample accuracy
     correct, accuracy = get_correct_and_accuracy(outputs, targets)
 
-    if config.base.debug:# and batch_idx % config.train.log_interval == 0:
+    if config.base.debug:
         # print data, target and output stats for debugging
         # logger.debug(f"Batch {batch_idx}:")
         # print(targets.cpu().numpy().tolist())
         # # print the output tensor as indices of the max logits
         # print(outputs.argmax(dim=1).cpu().numpy().tolist())
-        
-        logger.debug(f"  Loss: {loss.item():.4f}, Accuracy: {accuracy*100:.2f}%")
-        # Uncomment the following line to log output tensor details
 
-    return loss.item(), correct, accuracy
+        logger.debug(f"  Loss: {loss.detach():.4f}, Accuracy: {accuracy*100:.2f}%")
+
+    return loss.detach(), correct, accuracy
 
 
 def train_epoch(
-        model: nn.Module, 
-        dataloader: DataLoader, 
-        criterion: nn.Module, 
-        optimizer: optim.Optimizer, 
-        batch_count: int, 
-        config: config.Config, 
-        start_time: float, 
+        model: nn.Module,
+        dataloader: DataLoader,
+        criterion: nn.Module,
+        optimizer: optim.Optimizer,
+        batch_count: int,
+        config: config.Config,
+        start_time: float,
         last_checkpoint_time: float
     ) -> tuple[float, float, int, float]:
-    """Train for one epoch"""
+    """Train for one epoch
+
+    Note: This function is kept for backward compatibility but is deprecated.
+    Use PyTorch Lightning's LitModel instead for new code.
+    """
     model.train()
     total_loss = 0.0
     current_time = time.time()
@@ -87,7 +93,7 @@ def train_epoch(
             model=model, batch=batch, criterion=criterion, optimizer=optimizer, config=config, batch_idx=batch_idx, device=device, dtype=dtype
         )
         batch_size = batch[0].shape[0]
-        total_loss += loss
+        total_loss += loss.item()  # Convert to scalar for accumulation
         correct += batch_correct
         total_samples += batch_size
 
@@ -95,12 +101,12 @@ def train_epoch(
         current_time = time.time()
         if current_time - last_checkpoint_time >= checkpoint_interval_seconds:
             elapsed_time = current_time - start_time
-            logger.info(f"Batch {batch_count}, Loss: {loss:.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
+            logger.info(f"Batch {batch_count}, Loss: {loss.item():.4f}, Elapsed: {elapsed_time/60:.1f} minutes - Saving checkpoint...")
             io_funcs.save_checkpoint(model=model, optimizer=optimizer, batch_count=batch_count, config=config, job_id=config.base.job_id, elapsed_time=elapsed_time)
             last_checkpoint_time = current_time
 
         if batch_idx % config.train.log_interval == 0:
-            logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss:.4f}, Accuracy: {100 * accuracy:.2f}%")
+            logger.info(f"  Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}, Accuracy: {100 * accuracy:.2f}%")
 
         if config.base.debug and batch_idx >= config.train.debugging_steps:
             break  # For debugging, limit to specified batches per epoch
@@ -111,7 +117,11 @@ def train_epoch(
 
 
 def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module, config: config.Config) -> tuple[float, float]:
-    """Evaluate model"""
+    """Evaluate model
+
+    Note: This function is kept for backward compatibility but is deprecated.
+    Use PyTorch Lightning's LitModel instead for new code.
+    """
     model.eval()
     total_loss = 0.0
     corrects, total_samples = 0, 0

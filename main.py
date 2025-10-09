@@ -1,6 +1,5 @@
 import argparse
 import logging
-import time
 
 # setup logging
 logging.basicConfig(
@@ -11,27 +10,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
+import lightning as L
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 
 from src import config
 from src import data
 from src import model
-from src import io_funcs
 from src import helpers
-from src import train
+from src.lightning_module import LitModel
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Training Script')
+    parser = argparse.ArgumentParser(description='Training Script with PyTorch Lightning')
     parser.add_argument('config_file', help='Config file path')
     parser.add_argument('--job_id', default='default', help='Job ID for checkpointing')
-    parser.add_argument('--resume', action='store_true', help='Resume from checkpoint')
+    parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint to resume from')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode with verbose logging')
-    parser.add_argument('--override', action='append', help='Override config values using dotted notation. Examples: --override "train.epochs=10 train.learning_rate=0.001" or --override train.epochs=10 --override train.learning_rate=0.001')
+    parser.add_argument('--override', action='append', help='Override config values using dotted notation')
 
     args = parser.parse_args()
-
 
     # If debug, set logging to DEBUG level across all modules
     if args.debug:
@@ -52,7 +50,10 @@ def main():
     cfg = config.Config.from_yaml(args.config_file, overrides=overrides if overrides else None)
     if overrides:
         logger.info(f"Applied config overrides: {overrides}")
+
+    # Setup seed for reproducibility
     helpers.setup_seed(cfg.base.seed)
+    L.seed_everything(cfg.base.seed, workers=True)
 
     # If job_id provided via CLI, override config
     if args.job_id:
@@ -77,67 +78,92 @@ def main():
     net = model.create_model(config=cfg, input_shape=input_shape, num_classes=num_classes)
     logger.info(f"Model: {cfg.model.model_type} with input shape {input_shape}")
 
-    # Setup training
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(net.parameters(), lr=cfg.train.learning_rate)
+    # Wrap model in Lightning module
+    lit_model = LitModel(model=net, cfg=cfg, num_classes=num_classes)
 
-    # Resume or start fresh
-    start_batch = 0
-    start_time = time.time()
-    last_checkpoint_time = start_time
+    # Setup WandB logger
+    wandb_logger = WandbLogger(
+        project=cfg.base.wandb.project,
+        entity=cfg.base.wandb.entity,
+        name=cfg.base.wandb.run_name if cfg.base.wandb.run_name else f"{cfg.base.job_id}_{cfg.model.model_type}",
+        tags=cfg.base.wandb.tags,
+        notes=cfg.base.wandb.notes,
+        offline=not cfg.base.wandb.online,
+        save_dir=cfg.train.model_path,
+    )
 
-    if args.resume:
-        checkpoint = io_funcs.load_checkpoint(args.job_id)
-        if checkpoint:
-            net.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            start_batch = checkpoint['batch_count']
-            # Adjust start time if we have elapsed time from checkpoint
-            if 'elapsed_time' in checkpoint:
-                start_time = time.time() - checkpoint['elapsed_time']
-            logger.info(f"Resumed training from batch {start_batch}")
-        else:
-            logger.info("No checkpoint found, starting fresh")
-    else:
-        logger.info("Starting fresh training")
+    # Setup callbacks
+    callbacks = []
 
-    # Training loop
-    batch_count = start_batch
-    max_batches = len(train_dataloader) * cfg.train.epochs
+    # Model checkpointing
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=f"{cfg.train.model_path}/{cfg.base.job_id}",
+        filename='{epoch:02d}-{val/acc:.4f}',
+        monitor='val/acc',
+        mode='max',
+        save_top_k=3 if cfg.train.save_model else 0,
+        save_last=True,
+        verbose=True,
+    )
+    callbacks.append(checkpoint_callback)
 
-    logger.info(f"Training for {cfg.train.epochs} epochs ({max_batches} total batches)")
-    logger.info(f"Checkpoint interval: {cfg.train.checkpoint_interval_minutes} minutes")
+    # Learning rate monitoring
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+    callbacks.append(lr_monitor)
 
-    for epoch in range(cfg.train.epochs):
-        logger.info(f"\nEpoch {epoch + 1}/{cfg.train.epochs}")
-
-        # Train
-        train_loss_per_sample, train_accuracy, batch_count, last_checkpoint_time = train.train_epoch(
-            model=net,
-            dataloader=train_dataloader,
-            criterion=criterion,
-            optimizer=optimizer,
-            batch_count=batch_count,
-            config=cfg,
-            start_time=start_time,
-            last_checkpoint_time=last_checkpoint_time
+    # Early stopping (if enabled)
+    if cfg.train.early_stopping.enabled:
+        early_stop_callback = EarlyStopping(
+            monitor=cfg.train.early_stopping.monitor,
+            patience=cfg.train.early_stopping.patience,
+            mode=cfg.train.early_stopping.mode,
+            min_delta=cfg.train.early_stopping.min_delta,
+            verbose=True,
         )
+        callbacks.append(early_stop_callback)
+        logger.info(f"Early stopping enabled: monitor={cfg.train.early_stopping.monitor}, patience={cfg.train.early_stopping.patience}")
 
-        # Evaluate
-        test_loss, test_accuracy = train.evaluate(
-            model=net,
-            dataloader=test_dataloader,
-            criterion=criterion,
-            config=cfg
-        )
+    # Determine precision
+    precision = "32"
+    if cfg.train.dtype == torch.float16:
+        precision = "16-mixed"
+    elif cfg.train.dtype == torch.bfloat16:
+        precision = "bf16-mixed"
+    logger.info(f"Training precision: {precision}")
 
-        logger.info(f"Epoch {epoch + 1} - Train Loss: {train_loss_per_sample:.4f}, Train Acc: {train_accuracy:.2f}%, Test Loss: {test_loss:.4f}, Test Acc: {test_accuracy:.2f}%")
+    # Create Lightning Trainer
+    trainer = L.Trainer(
+        max_epochs=cfg.train.epochs,
+        accelerator="auto",  # Automatically selects GPU/CPU
+        devices="auto",  # Use all available devices
+        precision=precision,
+        logger=wandb_logger,
+        callbacks=callbacks,
+        log_every_n_steps=cfg.train.lightning.log_every_n_steps,
+        enable_progress_bar=cfg.train.lightning.enable_progress_bar,
+        gradient_clip_val=cfg.train.lightning.gradient_clip_val,
+        accumulate_grad_batches=cfg.train.lightning.accumulate_grad_batches,
+        check_val_every_n_epoch=cfg.train.lightning.check_val_every_n_epoch,
+        num_sanity_val_steps=cfg.train.lightning.num_sanity_val_steps if not cfg.base.debug else 0,
+        fast_dev_run=cfg.base.debug,  # Run 1 batch of train/val/test for debugging
+        deterministic=True,  # For reproducibility
+    )
 
-    # Save final checkpoint
-    if cfg.train.save_model:
-        final_elapsed_time = time.time() - start_time
-        io_funcs.save_checkpoint(net, optimizer, batch_count, cfg, args.job_id, final_elapsed_time)
-        logger.info(f"Final checkpoint saved for job {args.job_id}")
+    # Train the model
+    logger.info(f"Starting training for {cfg.train.epochs} epochs...")
+    trainer.fit(
+        model=lit_model,
+        train_dataloaders=train_dataloader,
+        val_dataloaders=test_dataloader,
+        ckpt_path=args.resume if args.resume else None,
+    )
+
+    logger.info("Training completed!")
+
+    # Log final metrics
+    if not cfg.base.debug:
+        logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
+        logger.info(f"Best val/acc: {checkpoint_callback.best_model_score:.4f}")
 
 if __name__ == "__main__":
     main()
