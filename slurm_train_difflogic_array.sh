@@ -66,7 +66,7 @@ echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
 # Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.num_neurons=$NEURON_COUNT --override base.wandb.run_name="cifar10dvs_difflogic_${NEURON_COUNT}neurons"
+./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.difflogic.num_neurons=$NEURON_COUNT --override base.wandb.run_name="cifar10dvs_difflogic_${NEURON_COUNT}neurons"
 
 # Check return status
 if [ $? -eq 0 ]; then
