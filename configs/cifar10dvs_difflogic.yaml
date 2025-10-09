@@ -2,7 +2,7 @@ base:
   seed: 42
   job_id: "baseline_difflogic_run"
   wandb:
-    online: false  # Set to true to enable WandB logging
+    online: true  # Set to true to enable WandB logging
     project: "difflogic-tonic"
     entity: null
     run_name: null
@@ -18,7 +18,7 @@ data:
   cache_identifier: null  # or "events_20000_overlap0_denoise5000"
 
   # Input transforms
-  downsample_pool_size: 4  # Max pooling: 128x128 -> 64x64 (2), 128x128 -> 32x32 (4), null for no downsampling
+  downsample_pool_size: 2  # Max pooling: 128x128 -> 64x64 (2), 128x128 -> 32x32 (4), null for no downsampling
 
   # Data augmentation (applied only to training set)
   augmentation:
@@ -32,7 +32,7 @@ train:
   learning_rate: 1e-2
   log_interval: 250
   debugging_steps: 1000
-  save_model: true  # Enable to save model checkpoints
+  save_model: false  # Enable to save model checkpoints
   checkpoint_interval_minutes: 10.0  # Deprecated with Lightning (uses callbacks instead)
   model_path: models/
   device: cuda

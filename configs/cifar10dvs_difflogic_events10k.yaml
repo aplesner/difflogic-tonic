@@ -1,40 +1,40 @@
 base:
   seed: 42
-  job_id: "baseline_mlp_run"
+  job_id: "difflogic_events10k"
   wandb:
-    online: false
+    online: false  # Set to true to enable WandB logging
     project: "difflogic-tonic"
     entity: null
     run_name: null
-    tags: ["nmnist", "mlp"]
-    notes: null
+    tags: ["cifar10dvs", "difflogic", "events_10k"]
+    notes: "Training with 10k events per frame"
 
 data:
-  name: NMNIST  # Options: NMNIST, CIFAR10DVS
+  name: CIFAR10DVS
 
-  # Optional: specify cached dataset variant
-  cache_identifier: null
+  # Use the 10k events per frame cached variant
+  cache_identifier: "events_10000_overlap0.75_denoise5000"
 
   # Input transforms
-  downsample_pool_size: null  # Max pooling downsampling (null = disabled)
+  downsample_pool_size: 4  # null: 128x128. 2: 64x64. 4: 32x32. 8: 16x16.
 
   # Data augmentation (applied only to training set)
   augmentation:
-    horizontal_flip_probability: 0.0  # Probability [0.0-1.0] for horizontal flip (0 = disabled)
+    horizontal_flip_probability: 0.5  # Probability [0.0-1.0] for horizontal flip
     vertical_flip_probability: 0.0  # Probability [0.0-1.0] for vertical flip (0 = disabled)
     random_crop_padding: 0  # Padding for random crop (0 = disabled)
-    salt_pepper_noise: 0.0  # Probability [0.0-1.0] to flip random pixels
+    salt_pepper_noise: 0.20  # Probability [0.0-1.0] to flip random pixels
 
 train:
-  epochs: 3
-  learning_rate: 1e-3
+  epochs: 10
+  learning_rate: 1e-2
   log_interval: 250
-  debugging_steps: 5
+  debugging_steps: 1000
   save_model: false
   checkpoint_interval_minutes: 10.0
   model_path: models/
   device: cuda
-  dtype: bfloat16 # options: float16, bfloat16, float32
+  dtype: float16
   dataloader:
     batch_size: 64
     num_workers: 6
@@ -64,7 +64,11 @@ train:
     num_sanity_val_steps: 2
 
 model:
-  model_type: MLP
-  mlp:
-    hidden_size: 512
-    num_hidden_layers: 1
+  model_type: DiffLogic
+  difflogic:
+    architecture: "fully_connected"
+    num_neurons: 32000
+    num_layers: 4
+    connections: "random"
+    grad_factor: 1.0
+    tau: 10.0

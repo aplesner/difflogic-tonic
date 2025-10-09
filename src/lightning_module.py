@@ -32,10 +32,14 @@ class LitModel(L.LightningModule):
         self.model = model
         self.cfg = cfg
         self.criterion = nn.CrossEntropyLoss()
+        self.num_classes = num_classes
 
         # Metrics - using torchmetrics for proper distributed computation
         self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
+
+        # For periodic detailed logging
+        self.log_output_every_n_steps = cfg.train.lightning.log_every_n_steps * 5  # Log outputs less frequently
 
         # Save hyperparameters for logging
         self.save_hyperparameters(ignore=['model'])
@@ -76,6 +80,10 @@ class LitModel(L.LightningModule):
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('train/acc', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
+        # Periodic detailed logging of outputs
+        if batch_idx % self.log_output_every_n_steps == 0:
+            self._log_output_statistics(outputs, targets, prefix='train')
+
         return loss
 
     def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
@@ -99,6 +107,10 @@ class LitModel(L.LightningModule):
         # Log metrics
         self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         self.log('val/acc', acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        # Log detailed statistics for first batch of each validation epoch
+        if batch_idx == 0:
+            self._log_output_statistics(outputs, targets, prefix='val')
 
         return loss
 
@@ -125,6 +137,89 @@ class LitModel(L.LightningModule):
         self.log('test/acc', acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
+
+    def _log_output_statistics(self, outputs: torch.Tensor, targets: torch.Tensor, prefix: str):
+        """Log detailed statistics about model outputs
+
+        Args:
+            outputs: Model output logits [batch_size, num_classes]
+            targets: Ground truth labels [batch_size]
+            prefix: Logging prefix (e.g., 'train', 'val')
+        """
+        with torch.no_grad():
+            # Compute softmax probabilities
+            probs = torch.softmax(outputs, dim=1)
+
+            # Logit statistics
+            logit_mean = outputs.mean()
+            logit_std = outputs.std()
+            logit_min = outputs.min()
+            logit_max = outputs.max()
+
+            # Probability statistics
+            prob_mean = probs.mean()
+            prob_std = probs.std()
+
+            # Confidence statistics (max probability per sample)
+            max_probs, _ = probs.max(dim=1)
+            confidence_mean = max_probs.mean()
+            confidence_std = max_probs.std()
+            confidence_min = max_probs.min()
+            confidence_max = max_probs.max()
+
+            # Per-class prediction distribution
+            preds = outputs.argmax(dim=1)
+
+            # Ground truth class distribution
+            target_counts = torch.bincount(targets, minlength=self.num_classes).float()
+            target_distribution = target_counts / targets.size(0)
+
+            # Prediction class distribution
+            pred_counts = torch.bincount(preds, minlength=self.num_classes).float()
+            pred_distribution = pred_counts / preds.size(0)
+
+            # Entropy of predictions (measure of uncertainty)
+            entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=1).mean()
+
+            # Log scalar statistics
+            self.log(f'{prefix}/logit_mean', logit_mean, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/logit_std', logit_std, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/logit_min', logit_min, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/logit_max', logit_max, on_step=False, on_epoch=True, logger=True)
+
+            self.log(f'{prefix}/prob_mean', prob_mean, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/prob_std', prob_std, on_step=False, on_epoch=True, logger=True)
+
+            self.log(f'{prefix}/confidence_mean', confidence_mean, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/confidence_std', confidence_std, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/confidence_min', confidence_min, on_step=False, on_epoch=True, logger=True)
+            self.log(f'{prefix}/confidence_max', confidence_max, on_step=False, on_epoch=True, logger=True)
+
+            self.log(f'{prefix}/entropy', entropy, on_step=False, on_epoch=True, logger=True)
+
+            # Log to console periodically
+            if prefix == 'train':
+                logger.debug(
+                    f"Output stats - Logits: [{logit_min:.3f}, {logit_max:.3f}] "
+                    f"(μ={logit_mean:.3f}, σ={logit_std:.3f}), "
+                    f"Confidence: μ={confidence_mean:.3f}, σ={confidence_std:.3f}, "
+                    f"Entropy: {entropy:.3f}"
+                )
+
+            # Log distributions to WandB if available
+            if self.logger and hasattr(self.logger, 'experiment'):
+                try:
+                    # Log histograms for WandB
+                    self.logger.experiment.log({
+                        f'{prefix}/logits_histogram': outputs.detach().cpu().numpy().flatten(),
+                        f'{prefix}/probs_histogram': probs.detach().cpu().numpy().flatten(),
+                        f'{prefix}/confidence_histogram': max_probs.detach().cpu().numpy(),
+                        f'{prefix}/target_distribution': target_distribution.detach().cpu().numpy(),
+                        f'{prefix}/pred_distribution': pred_distribution.detach().cpu().numpy(),
+                    })
+                except Exception as e:
+                    # Silently fail if logging to WandB fails (e.g., offline mode)
+                    pass
 
     def configure_optimizers(self):
         """Configure optimizer and optional learning rate scheduler
