@@ -1,5 +1,5 @@
 # Data preparation configuration for CIFAR10DVS dataset
-# Frame mode: Event count with 15000 events per frame
+# Frame mode: Event count with 40000 events per frame
 
 base:
   seed: 42
@@ -15,7 +15,7 @@ data:
   frame_mode: event_count
 
   # Event count mode parameters
-  events_per_frame: 15000
+  events_per_frame: 40000
   overlap: 0.75
 
   # Preprocessing parameters
