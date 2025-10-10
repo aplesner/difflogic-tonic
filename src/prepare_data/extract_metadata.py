@@ -221,15 +221,16 @@ def extract_metadata_dataset(dataset, prep_config: PrepareDataConfig, sensor_siz
     return results
 
 
-def compute_statistics(train_metadata: list[dict], test_metadata: list[dict]) -> dict:
+def compute_statistics(train_metadata: list[dict], val_metadata: list[dict], test_metadata: list[dict]) -> dict:
     """Compute aggregate statistics from metadata
 
     Args:
         train_metadata: List of training sample metadata
+        val_metadata: List of validation sample metadata
         test_metadata: List of test sample metadata
 
     Returns:
-        Dictionary with statistics for train and test splits
+        Dictionary with statistics for train, val, and test splits
     """
     def compute_split_stats(metadata_list):
         """Compute statistics for one split"""
@@ -281,6 +282,7 @@ def compute_statistics(train_metadata: list[dict], test_metadata: list[dict]) ->
 
     return {
         'train': compute_split_stats(train_metadata),
+        'val': compute_split_stats(val_metadata),
         'test': compute_split_stats(test_metadata)
     }
 
@@ -304,6 +306,7 @@ def save_metadata(
     dataset_name: str,
     cache_identifier: str,
     train_metadata: list[dict],
+    val_metadata: list[dict],
     test_metadata: list[dict],
     config: dict,
     statistics: dict
@@ -314,6 +317,7 @@ def save_metadata(
         dataset_name: Name of dataset
         cache_identifier: Cache identifier string
         train_metadata: List of training sample metadata
+        val_metadata: List of validation sample metadata
         test_metadata: List of test sample metadata
         config: Configuration dictionary
         statistics: Statistics dictionary
@@ -325,6 +329,7 @@ def save_metadata(
         'cache_identifier': cache_identifier,
         'config': config,
         'train_metadata': train_metadata,
+        'val_metadata': val_metadata,
         'test_metadata': test_metadata,
         'statistics': statistics
     }
@@ -337,7 +342,7 @@ def save_metadata(
 
 
 def extract_and_save_metadata(prep_config: PrepareDataConfig):
-    """Main function: extract metadata for train/test splits and save to disk
+    """Main function: extract metadata for train/val/test splits and save to disk
 
     Args:
         prep_config: Preparation configuration
@@ -346,39 +351,35 @@ def extract_and_save_metadata(prep_config: PrepareDataConfig):
     logger.info(f"Cache identifier: {prep_config.get_cache_identifier()}")
 
     # Get raw datasets (reuses prepare.py logic for identical split!)
-    dataset_train, dataset_test, sensor_size = get_raw_datasets_with_split(prep_config)
+    dataset_train, dataset_val, dataset_test, sensor_size = get_raw_datasets_with_split(prep_config)
 
-    logger.info(f"Dataset sizes - Train: {len(dataset_train)}, Test: {len(dataset_test)}")
+    logger.info(f"Dataset sizes - Train: {len(dataset_train)}, Val: {len(dataset_val)}, Test: {len(dataset_test)}")
 
-    # Extract metadata from both splits
+    # Extract metadata from all splits
     logger.info("Extracting training set metadata...")
     train_metadata = extract_metadata_dataset(dataset_train, prep_config, sensor_size)
+
+    logger.info("Extracting validation set metadata...")
+    val_metadata = extract_metadata_dataset(dataset_val, prep_config, sensor_size)
 
     logger.info("Extracting test set metadata...")
     test_metadata = extract_metadata_dataset(dataset_test, prep_config, sensor_size)
 
     # Compute statistics
     logger.info("Computing statistics...")
-    statistics = compute_statistics(train_metadata, test_metadata)
+    statistics = compute_statistics(train_metadata, val_metadata, test_metadata)
 
     # Log statistics
     logger.info("\n=== Statistics ===")
-    logger.info(f"Training set:")
-    for key, value in statistics['train'].items():
-        if isinstance(value, dict):
-            logger.info(f"  {key}:")
-            for subkey, subvalue in value.items():
-                logger.info(f"    {subkey}: {subvalue}")
-        else:
-            logger.info(f"    {key}: {value}")
-    logger.info(f"Test set:")
-    for key, value in statistics['test'].items():
-        logger.info(f"  {key}:")
-        if isinstance(value, dict):
-            for subkey, subvalue in value.items():
-                logger.info(f"    {subkey}: {subvalue}")
-        else:
-            logger.info(f"    {key}: {value}")
+    for split_name in ['train', 'val', 'test']:
+        logger.info(f"{split_name.capitalize()} set:")
+        for key, value in statistics[split_name].items():
+            if isinstance(value, dict):
+                logger.info(f"  {key}:")
+                for subkey, subvalue in value.items():
+                    logger.info(f"    {subkey}: {subvalue}")
+            else:
+                logger.info(f"  {key}: {value}")
 
     # Save metadata
     logger.info("\nSaving metadata...")
@@ -386,6 +387,7 @@ def extract_and_save_metadata(prep_config: PrepareDataConfig):
         dataset_name=prep_config.name,
         cache_identifier=prep_config.get_cache_identifier(),
         train_metadata=train_metadata,
+        val_metadata=val_metadata,
         test_metadata=test_metadata,
         config=prep_config.model_dump(),
         statistics=statistics

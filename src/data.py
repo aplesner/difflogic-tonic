@@ -108,7 +108,7 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader, DataLoa
         logger.info(f"Loading cached data for dataset: {dataset_name}")
         if cache_identifier:
             logger.info(f"Using cache variant: {cache_identifier}")
-        train_cache, test_cache = get_data_splits(dataset_name, cache_identifier)
+        train_cache, val_cache, test_cache = get_data_splits(dataset_name, cache_identifier)
 
         logger.info(f"Cached data loaded successfully.")
 
@@ -116,11 +116,7 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader, DataLoa
         raise
 
     train_dataset = torch.utils.data.TensorDataset(train_cache['data'], train_cache['labels'])
-    # split the train dataset into train and val
-    train_size = int(0.9 * len(train_dataset))
-    val_size = len(train_dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [train_size, val_size])
-
+    val_dataset = torch.utils.data.TensorDataset(val_cache['data'], val_cache['labels'])
     test_dataset = torch.utils.data.TensorDataset(test_cache['data'], test_cache['labels'])
     # Build transform pipelines using torchvision.transforms.v2
     train_transforms: list[Any] = [

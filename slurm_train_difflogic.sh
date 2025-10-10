@@ -61,16 +61,26 @@ echo "  SCRATCH_STORAGE_DIR: $SCRATCH_STORAGE_DIR"
 echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
-WANDB_RUN_NAME="c10_dlgn_${NUM_NEURONS}neurons_${TAU}tau_salt${SALT_PEPPER_NOISE}_crop${RANDOM_CROP}_down${DOWNSAMPLE_FACTOR}"
-OVERRIDES="model.difflogic.num_neurons=${NUM_NEURONS} \
-model.difflogic.tau=${TAU} \
-base.wandb.run_name=${WANDB_RUN_NAME} \
-data.downsample_factor=${DOWNSAMPLE_FACTOR} \
-data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} \
-data.augmentation.random_crop_padding=${RANDOM_CROP}"
+WANDB_RUN_NAME="\
+c10_dlgn_\
+${NUM_NEURONS}neurons_\
+${TAU}tau_\
+salt_pepper${SALT_PEPPER_NOISE}_\
+crop${RANDOM_CROP}\
+_downsample${DOWNSAMPLE_FACTOR}"
+echo "WandB Run Name: $WANDB_RUN_NAME"
 
-# Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override "${OVERRIDES}"
+
+OVERRIDES="\
+--override model.difflogic.num_neurons=${NUM_NEURONS} \
+--override model.difflogic.tau=${TAU} \
+--override base.wandb.run_name=${WANDB_RUN_NAME} \
+--override data.downsample_factor=${DOWNSAMPLE_FACTOR} \
+--override data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} \
+--override data.augmentation.random_crop_padding=${RANDOM_CROP}"
+
+# Run train.sh with the selected config and overrides. The overrides should be enclosed in quotes.
+./train.sh "$CONFIG_FILE" "$JOB_ID" "${OVERRIDES}"
 
 # Check return status
 if [ $? -eq 0 ]; then

@@ -25,7 +25,8 @@ data:
   num_threads: 8
 
   # Dataset splitting
-  test_split: 0.2
+  test_split: 0.15
+  val_split: 0.05
 
   # Cache control
   reset_cache: true

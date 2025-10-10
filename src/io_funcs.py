@@ -6,6 +6,7 @@ import logging
 import torch
 
 from .config import Config
+from .classes import PreparedDataset
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def get_checkpoint_path(job_id: str) -> Path:
     return storage_dir / f'checkpoint_{job_id}.pt'
 
 
-def get_data_paths(dataset_name: str, use_project_storage: bool = False, cache_identifier: str | None = None) -> tuple[Path, Path]:
+def get_data_paths(dataset_name: str, use_project_storage: bool = False, cache_identifier: str | None = None) -> tuple[Path, Path, Path]:
     """Get paths for tensor data
 
     Args:
@@ -46,6 +47,9 @@ def get_data_paths(dataset_name: str, use_project_storage: bool = False, cache_i
         use_project_storage: If True, use project storage (long-term, IO bound)
                            If False, use scratch storage (short-term, high IO throughput)
         cache_identifier: Optional identifier for cached data variant (e.g., "events_20000_overlap15000")
+
+    Returns:
+        Tuple of (train_path, val_path, test_path)
     """
     if use_project_storage:
         # Use project storage paths (data_root/cache)
@@ -57,48 +61,68 @@ def get_data_paths(dataset_name: str, use_project_storage: bool = False, cache_i
     storage_dir.mkdir(parents=True, exist_ok=True)
 
     if cache_identifier:
-        train_path = storage_dir / f"{dataset_name}_{cache_identifier}_train_data.pt"
-        test_path = storage_dir / f"{dataset_name}_{cache_identifier}_test_data.pt"
+        train_path = storage_dir / f"{dataset_name}_{cache_identifier}/train_data.pt"
+        val_path = storage_dir / f"{dataset_name}_{cache_identifier}/val_data.pt"
+        test_path = storage_dir / f"{dataset_name}_{cache_identifier}/test_data.pt"
     else:
-        train_path = storage_dir / f"{dataset_name}_train_data.pt"
-        test_path = storage_dir / f"{dataset_name}_test_data.pt"
+        train_path = storage_dir / f"{dataset_name}/train_data.pt"
+        val_path = storage_dir / f"{dataset_name}/val_data.pt"
+        test_path = storage_dir / f"{dataset_name}/test_data.pt"
 
-    return train_path, test_path
+    # Ensure directories exist
+    train_path.parent.mkdir(parents=True, exist_ok=True)
+    val_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return train_path, val_path, test_path
 
 
 def save_data_splits(
         dataset_name: str,
-        train_tensor: torch.Tensor,
-        train_labels_tensor: torch.Tensor,
-        test_tensor: torch.Tensor,
-        test_labels_tensor: torch.Tensor,
+        prepared_dataset: PreparedDataset,
         cache_identifier: str | None = None
-    ) -> tuple[tuple[Path, Path], tuple[Path, Path]]:
-    """Save dataset splits to both scratch and project storage"""
+    ) -> tuple[tuple[Path, Path, Path], tuple[Path, Path, Path]]:
+    """Save dataset splits to both scratch and project storage
+
+    Returns:
+        Tuple of ((scratch_train, scratch_val, scratch_test), (project_train, project_val, project_test))
+    """
     # Get paths
-    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
-    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
+    ( scratch_train_path, scratch_val_path, scratch_test_path
+    ) = get_data_paths(
+        dataset_name, use_project_storage=False, cache_identifier=cache_identifier
+    )
+    
+    (project_train_path, project_val_path, project_test_path
+    ) = get_data_paths(
+        dataset_name, use_project_storage=True, cache_identifier=cache_identifier
+    )
 
     # Save to scratch storage
-    torch.save({'data': train_tensor, 'labels': train_labels_tensor}, scratch_train_path)
-    torch.save({'data': test_tensor, 'labels': test_labels_tensor}, scratch_test_path)
+    torch.save({'data': prepared_dataset.train.data, 'labels': prepared_dataset.train.labels}, scratch_train_path)
+    torch.save({'data': prepared_dataset.val.data, 'labels': prepared_dataset.val.labels}, scratch_val_path)
+    torch.save({'data': prepared_dataset.test.data, 'labels': prepared_dataset.test.labels}, scratch_test_path)
 
     # Save to project storage
-    torch.save({'data': train_tensor, 'labels': train_labels_tensor}, project_train_path)
-    torch.save({'data': test_tensor, 'labels': test_labels_tensor}, project_test_path)
-    
+    torch.save({'data': prepared_dataset.train.data, 'labels': prepared_dataset.train.labels}, project_train_path)
+    torch.save({'data': prepared_dataset.val.data, 'labels': prepared_dataset.val.labels}, project_val_path)
+    torch.save({'data': prepared_dataset.test.data, 'labels': prepared_dataset.test.labels}, project_test_path)
+
     logger.info(f"Dataset cached:")
-    logger.info(f"  Training: {train_tensor.shape}")
+    logger.info(f"  Training: {prepared_dataset.train.data.shape}")
     logger.info(f"    Scratch: {scratch_train_path}")
     logger.info(f"    Project: {project_train_path}")
-    logger.info(f"  Test: {test_tensor.shape}")
+    logger.info(f"  Validation: {prepared_dataset.val.data.shape}")
+    logger.info(f"    Scratch: {scratch_val_path}")
+    logger.info(f"    Project: {project_val_path}")
+    logger.info(f"  Test: {prepared_dataset.test.data.shape}")
     logger.info(f"    Scratch: {scratch_test_path}")
     logger.info(f"    Project: {project_test_path}")
 
-    return (scratch_train_path, scratch_test_path), (project_train_path, project_test_path)
+    return (scratch_train_path, scratch_val_path, scratch_test_path), (project_train_path, project_val_path, project_test_path)
 
 
-def get_data_splits(dataset_name: str, cache_identifier: str | None = None) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+def get_data_splits(dataset_name: str, cache_identifier: str | None = None) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     """Load dataset splits from cache
 
     Args:
@@ -106,43 +130,48 @@ def get_data_splits(dataset_name: str, cache_identifier: str | None = None) -> t
         cache_identifier: Optional cache variant identifier (e.g., "events_20000_overlap0_denoise5000")
 
     Returns:
-        Tuple of (train_cache, test_cache) dictionaries
+        Tuple of (train_cache, val_cache, test_cache) dictionaries
     """
     # Get paths for both storage types
-    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
-    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
+    scratch_train_path, scratch_val_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
+    project_train_path, project_val_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
 
-    scratch_exists = os.path.exists(scratch_train_path) and os.path.exists(scratch_test_path)
-    project_exists = os.path.exists(project_train_path) and os.path.exists(project_test_path)
+    scratch_exists = os.path.exists(scratch_train_path) and os.path.exists(scratch_val_path) and os.path.exists(scratch_test_path)
+    project_exists = os.path.exists(project_train_path) and os.path.exists(project_val_path) and os.path.exists(project_test_path)
 
     # Determine cache location
     if scratch_exists:
         logger.info(f"Using cached data from scratch storage{' with identifier: ' + cache_identifier if cache_identifier else ''}")
-        train_path, test_path = scratch_train_path, scratch_test_path
+        train_path, val_path, test_path = scratch_train_path, scratch_val_path, scratch_test_path
     elif project_exists:
         logger.info(f"Found cache in project storage{' with identifier: ' + cache_identifier if cache_identifier else ''}, copying to scratch...")
         copy_cache_from_project_to_scratch(dataset_name, cache_identifier)
-        train_path, test_path = scratch_train_path, scratch_test_path
+        train_path, val_path, test_path = scratch_train_path, scratch_val_path, scratch_test_path
     else:
         # No cache found - raise error
         cache_msg = f" with identifier '{cache_identifier}'" if cache_identifier else ""
         error_msg = (
             f"Cached data not found for dataset '{dataset_name}'{cache_msg}\n"
             f"Checked locations:\n"
-            f"  Scratch: {scratch_train_path} ({'missing' if not scratch_exists else 'found'}) and {scratch_test_path} ({'missing' if not scratch_exists else 'found'})\n"
-            f"  Project: {project_train_path} ({'missing' if not project_exists else 'found'}) and {project_test_path} ({'missing' if not project_exists else 'found'})\n\n"
+            f"  Scratch: {scratch_train_path} ({'missing' if not os.path.exists(scratch_train_path) else 'found'}), "
+            f"{scratch_val_path} ({'missing' if not os.path.exists(scratch_val_path) else 'found'}), "
+            f"{scratch_test_path} ({'missing' if not os.path.exists(scratch_test_path) else 'found'})\n"
+            f"  Project: {project_train_path} ({'missing' if not os.path.exists(project_train_path) else 'found'}), "
+            f"{project_val_path} ({'missing' if not os.path.exists(project_val_path) else 'found'}), "
+            f"{project_test_path} ({'missing' if not os.path.exists(project_test_path) else 'found'})\n\n"
             f"Please run 'python3 prepare_data.py <config_file>' to prepare the dataset first."
         )
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
-    
+
 
     # Load cached TensorDatasets
-    logger.info(f"Loading cached data from: {train_path}, {test_path}")
+    logger.info(f"Loading cached data from: {train_path}, {val_path}, {test_path}")
     train_cache = torch.load(train_path, map_location='cpu', weights_only=True)
+    val_cache = torch.load(val_path, map_location='cpu', weights_only=True)
     test_cache = torch.load(test_path, map_location='cpu', weights_only=True)
 
-    return train_cache, test_cache
+    return train_cache, val_cache, test_cache
 
 def get_file_info(file_path: Path | None) -> tuple[float, tuple, tuple] | None:
     """Get file size and tensor shapes from a cached dataset file
@@ -175,8 +204,10 @@ def discover_datasets() -> dict[str, dict[str, Path]]:
         {
             'NMNIST': {
                 'scratch_train': Path(...),
+                'scratch_val': Path(...),
                 'scratch_test': Path(...),
                 'project_train': Path(...),
+                'project_val': Path(...),
                 'project_test': Path(...),
             }
         }
@@ -194,6 +225,10 @@ def discover_datasets() -> dict[str, dict[str, Path]]:
             dataset_name = file_path.name.replace('_train_data.pt', '')
             datasets[dataset_name]['scratch_train'] = file_path
 
+        for file_path in scratch_dir.glob('*_val_data.pt'):
+            dataset_name = file_path.name.replace('_val_data.pt', '')
+            datasets[dataset_name]['scratch_val'] = file_path
+
         for file_path in scratch_dir.glob('*_test_data.pt'):
             dataset_name = file_path.name.replace('_test_data.pt', '')
             datasets[dataset_name]['scratch_test'] = file_path
@@ -203,6 +238,10 @@ def discover_datasets() -> dict[str, dict[str, Path]]:
         for file_path in project_dir.glob('*_train_data.pt'):
             dataset_name = file_path.name.replace('_train_data.pt', '')
             datasets[dataset_name]['project_train'] = file_path
+
+        for file_path in project_dir.glob('*_val_data.pt'):
+            dataset_name = file_path.name.replace('_val_data.pt', '')
+            datasets[dataset_name]['project_val'] = file_path
 
         for file_path in project_dir.glob('*_test_data.pt'):
             dataset_name = file_path.name.replace('_test_data.pt', '')
@@ -221,14 +260,16 @@ def copy_cache_from_project_to_scratch(dataset_name: str, cache_identifier: str 
     Returns:
         True if successfully copied, False if project cache doesn't exist
     """
-    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
-    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
+    project_train_path, project_val_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
+    scratch_train_path, scratch_val_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
 
-    if os.path.exists(project_train_path) and os.path.exists(project_test_path):
+    if os.path.exists(project_train_path) and os.path.exists(project_val_path) and os.path.exists(project_test_path):
         logger.info(f"Copying cached data from project to scratch storage...")
         shutil.copy2(project_train_path, scratch_train_path)
+        shutil.copy2(project_val_path, scratch_val_path)
         shutil.copy2(project_test_path, scratch_test_path)
         logger.info(f"  Copied: {project_train_path} -> {scratch_train_path}")
+        logger.info(f"  Copied: {project_val_path} -> {scratch_val_path}")
         logger.info(f"  Copied: {project_test_path} -> {scratch_test_path}")
         return True
     return False
