@@ -1,12 +1,12 @@
 base:
   seed: 42
-  job_id: "baseline_difflogic_run"
+  job_id: "baseline_difflut_run"
   wandb:
     online: false
     project: "difflogic-tonic"
     entity: null
     run_name: null
-    tags: ["nmnist", "difflogic"]
+    tags: ["nmnist", "difflut"]
     notes: null
 
 data:
@@ -72,7 +72,7 @@ model:
       neurallut:
         node_type: neurallut
         hidden_width: 16
-        depth: 4
+        depth: 2
         skip_interval: 2
         activation: leakyrelu
 
@@ -82,10 +82,10 @@ model:
         tau: 0.1
 
     n: 6
-    num_layers: 3
+    num_layers: 2
     default_layer: learnable
     default_node: neurallut
-    default_hidden_size: 64
+    default_hidden_size: 2048
 
     # # just an example
     # # 0 indexed
