@@ -70,7 +70,7 @@ data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} \
 data.augmentation.random_crop_padding=${RANDOM_CROP}"
 
 # Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override $OVERRIDES
+./train.sh "$CONFIG_FILE" "$JOB_ID" --override "${OVERRIDES}"
 
 # Check return status
 if [ $? -eq 0 ]; then
