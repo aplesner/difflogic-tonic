@@ -16,6 +16,8 @@ EXTRA_ARGS=${@:3}
 echo "Starting training with config: $CONFIG_FILE, job_id: $JOB_ID"
 echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 
+export WANDB_CACHE_DIR=${SCRATCH_STORAGE_DIR:-./scratch/aplesner}/wandb_cache
+
 # Use singularity if SINGULARITY_CONTAINER is set and bind the project and scratch directories
 if [ -n "$SINGULARITY_CONTAINER" ]; then
     echo "Using Singularity container: $SINGULARITY_CONTAINER"

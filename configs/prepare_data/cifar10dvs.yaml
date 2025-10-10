@@ -20,7 +20,8 @@ data:
   num_threads: 16           # Number of parallel processing threads
 
   # Dataset splitting (for CIFAR10DVS only, NMNIST has predefined splits)
-  test_split: 0.2          # Fraction of data to use for testing (0.0 - 1.0)
+  test_split: 0.15          # Fraction of data to use for testing (0.0 - 1.0)
+  val_split: 0.05           # Fraction of training data to use for validation (0.0 - 1.0)
 
   # Cache control
   reset_cache: true       # Set to true to force regeneration

@@ -2,12 +2,12 @@
 #SBATCH --job-name=train_cifar10dvs
 #SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
 #SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
-#SBATCH --array=1-16
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --array=1-3
+#SBATCH --mem=40G
 #SBATCH --nodes=1
 #SBATCH --time=2:00:00
-#SBATCH --nodelist=tikgpu06,tikgpu07,tikgpu09
+#SBATCH --exclude=tikgpu[06-10]
 #SBATCH --gres=gpu:1
 
 # SLURM Job Array Script for Training
@@ -17,34 +17,21 @@
 # Ensure logs directory exists
 # mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
 
-# Neuron counts to test
-NEURON_COUNTS=(
-    8000
-    16000
-    32000
-    64000
-)
+TAU_VALUES=(1 10 100)
 
-TAU=(
-    0.1
-    1
-    10
-    100
-)
-
-# Select neuron count and tau based on array task ID (1-indexed)
 INDEX=$((SLURM_ARRAY_TASK_ID - 1))
-NEURON_COUNT="${NEURON_COUNTS[$((INDEX % 4))]}"
-TAU_VALUE="${TAU[$((INDEX / 4))]}"
+TAU=${TAU_VALUES[$INDEX]}
 
-echo "Selected Neuron Count: $NEURON_COUNT"
-echo "Selected Tau: $TAU_VALUE"
+NUM_NEURONS=512000
+SALT_PEPPER_NOISE=0.1
+RANDOM_CROP=4
+DOWNSAMPLE_FACTOR=2
 
 # Config file
 CONFIG_FILE="configs/cifar10dvs_difflogic.yaml"
 
 # Job ID based on neuron count
-JOB_ID="neurons_${NEURON_COUNT}_tau_${TAU_VALUE}_run"
+JOB_ID="difflogic_${SLURM_JOB_ID}"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
@@ -74,8 +61,26 @@ echo "  SCRATCH_STORAGE_DIR: $SCRATCH_STORAGE_DIR"
 echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
-# Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.difflogic.num_neurons=$NEURON_COUNT --override model.difflogic.tau=$TAU_VALUE --override base.wandb.run_name="c10_dlgn_${NEURON_COUNT}neurons_${TAU_VALUE}tau"
+WANDB_RUN_NAME="\
+c10_dlgn_\
+${NUM_NEURONS}neurons_\
+${TAU}tau_\
+salt_pepper${SALT_PEPPER_NOISE}_\
+crop${RANDOM_CROP}\
+_downsample${DOWNSAMPLE_FACTOR}"
+echo "WandB Run Name: $WANDB_RUN_NAME"
+
+
+OVERRIDES="\
+--override model.difflogic.num_neurons=${NUM_NEURONS} \
+--override model.difflogic.tau=${TAU} \
+--override base.wandb.run_name=${WANDB_RUN_NAME} \
+--override data.downsample_factor=${DOWNSAMPLE_FACTOR} \
+--override data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} \
+--override data.augmentation.random_crop_padding=${RANDOM_CROP}"
+
+# Run train.sh with the selected config and overrides. The overrides should be enclosed in quotes.
+./train.sh "$CONFIG_FILE" "$JOB_ID" "${OVERRIDES}"
 
 # Check return status
 if [ $? -eq 0 ]; then

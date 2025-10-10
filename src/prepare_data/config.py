@@ -39,7 +39,8 @@ class PrepareDataConfig(BaseModel):
     seed: int = 42
 
     # Testing / validation settings
-    test_split: float = Field(default=0.2, ge=0.0, le=1.0)
+    test_split: float = Field(default=0.1, gt=0.0, lt=1.0)
+    val_split: float = Field(default=0.1, gt=0.0, lt=1.0)
 
     @model_validator(mode='after')
     def validate_frame_mode_parameters(self):
@@ -85,6 +86,7 @@ class PrepareDataConfig(BaseModel):
             'denoise_time': data_section.get('denoise_time', 1000),
             'num_threads': data_section.get('num_threads', 6),
             'test_split': data_section.get('test_split', 0.2),
+            'val_split': data_section.get('val_split', 0.1),
             'reset_cache': data_section.get('reset_cache', False),
             'output_suffix': data_section.get('output_suffix'),
             'seed': base_section.get('seed', 42),

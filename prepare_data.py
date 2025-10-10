@@ -72,21 +72,23 @@ Environment Variables:
 
     # Check if cache exists and reset_cache is False
     cache_identifier = prep_config.get_cache_identifier()
-    scratch_train_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
-    project_train_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
+    scratch_train_path, scratch_val_path, scratch_test_path = get_data_paths(dataset_name, use_project_storage=False, cache_identifier=cache_identifier)
+    project_train_path, project_val_path, project_test_path = get_data_paths(dataset_name, use_project_storage=True, cache_identifier=cache_identifier)
 
-    scratch_exists = Path(scratch_train_path).exists() and Path(scratch_test_path).exists()
-    project_exists = Path(project_train_path).exists() and Path(project_test_path).exists()
+    scratch_exists = Path(scratch_train_path).exists() and Path(scratch_val_path).exists() and Path(scratch_test_path).exists()
+    project_exists = Path(project_train_path).exists() and Path(project_val_path).exists() and Path(project_test_path).exists()
 
     if not prep_config.reset_cache and (scratch_exists or project_exists):
         logger.info("Cache already exists and reset_cache=False. Skipping preparation.")
         if scratch_exists:
             logger.info(f"  Using cache from scratch storage:")
             logger.info(f"    Train: {scratch_train_path}")
+            logger.info(f"    Validation: {scratch_val_path}")
             logger.info(f"    Test: {scratch_test_path}")
         elif project_exists:
             logger.info(f"  Using cache from project storage:")
             logger.info(f"    Train: {project_train_path}")
+            logger.info(f"    Validation: {project_val_path}")
             logger.info(f"    Test: {project_test_path}")
         logger.info("")
     else:
@@ -98,29 +100,19 @@ Environment Variables:
     # Show final cache status (paths already computed above)
     logger.info("=== Cache Status ===")
 
-    if Path(scratch_train_path).exists():
-        size_mb = Path(scratch_train_path).stat().st_size / (1024*1024)
-        logger.info(f"✓ Scratch train: {scratch_train_path} ({size_mb:.1f} MB)")
-    else:
-        logger.warning(f"✗ Scratch train: {scratch_train_path} (missing)")
-
-    if Path(scratch_test_path).exists():
-        size_mb = Path(scratch_test_path).stat().st_size / (1024*1024)
-        logger.info(f"✓ Scratch test: {scratch_test_path} ({size_mb:.1f} MB)")
-    else:
-        logger.warning(f"✗ Scratch test: {scratch_test_path} (missing)")
-
-    if Path(project_train_path).exists():
-        size_mb = Path(project_train_path).stat().st_size / (1024*1024)
-        logger.info(f"✓ Project train: {project_train_path} ({size_mb:.1f} MB)")
-    else:
-        logger.warning(f"✗ Project train: {project_train_path} (missing)")
-
-    if Path(project_test_path).exists():
-        size_mb = Path(project_test_path).stat().st_size / (1024*1024)
-        logger.info(f"✓ Project test: {project_test_path} ({size_mb:.1f} MB)")
-    else:
-        logger.warning(f"✗ Project test: {project_test_path} (missing)")
+    for path, desc in [
+        (scratch_train_path, "Scratch train"),
+        (scratch_val_path, "Scratch val"),
+        (scratch_test_path, "Scratch test"),
+        (project_train_path, "Project train"),
+        (project_val_path, "Project val"),
+        (project_test_path, "Project test"),
+    ]:
+         if Path(path).exists():
+             size_mb = Path(path).stat().st_size / (1024*1024)
+             logger.info(f"✓ {desc}: {path} ({size_mb:.1f} MB)")
+         else:
+             logger.warning(f"✗ {desc}: {path} (missing)")
 
     logger.info("")
     logger.info("Data preparation complete! You can now run training.")

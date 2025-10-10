@@ -19,5 +19,8 @@ data:
   # Processing settings (multiprocessing)
   num_threads: 12           # Number of parallel processing threads
 
+  # Dataset splitting
+  val_split: 0.05           # Fraction of training data to use for validation (0.0 - 1.0)
+
   # Cache control
   reset_cache: true       # Set to true to force regeneration

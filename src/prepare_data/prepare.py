@@ -12,26 +12,10 @@ import tonic.transforms as tonic_transforms
 import tqdm
 
 from .config import PrepareDataConfig
+from ..classes import DatasetSplit, PreparedDataset, SubsetDataset
 from ..io_funcs import save_data_splits
 
 logger = logging.getLogger(__name__)
-
-class SubsetDataset(torch.utils.data.Dataset):
-    """A subset of a dataset at specified indices.
-
-    Args:
-        dataset (torch.utils.data.Dataset): The whole Dataset.
-        indices (sequence): Indices in the whole set selected for subset.
-    """
-    def __init__(self, dataset, indices: list[int]) -> None:
-        self.dataset = dataset
-        self.indices = indices
-
-    def __getitem__(self, idx: int):
-        return self.dataset[self.indices[idx]]
-
-    def __len__(self) -> int:
-        return len(self.indices)
 
 
 class TransformPolarities:
@@ -91,7 +75,7 @@ def process_dataset(dataset, transform, prep_config: PrepareDataConfig) -> torch
     return torch.utils.data.TensorDataset(data, labels)
 
 
-def get_raw_datasets_with_split(prep_config: PrepareDataConfig) -> tuple[Any, Any, tuple]:
+def get_raw_datasets_with_split(prep_config: PrepareDataConfig) -> tuple[Any, Any, Any, tuple]:
     """Load raw datasets and apply train/test split WITHOUT any transforms
 
     This function is shared by both prepare.py and extract_metadata.py to ensure
@@ -109,28 +93,54 @@ def get_raw_datasets_with_split(prep_config: PrepareDataConfig) -> tuple[Any, An
 
     # Load raw datasets
     if dataset_name == "NMNIST":
-        dataset_train = tonic.datasets.NMNIST(data_root, train=True)
+        dataset_train_and_val = tonic.datasets.NMNIST(data_root, train=True)
         dataset_test = tonic.datasets.NMNIST(data_root, train=False)
+        # Create a fixed validation split from training set if needed
+        assert 0.0 < prep_config.val_split < 1.0, "val_split must be in (0.0, 1.0)"
+
+        dataset_size = len(dataset_train_and_val)
+        indices = np.arange(dataset_size)
+        val_size = int(prep_config.val_split * dataset_size)
+        train_size = dataset_size - val_size
+        random_state = np.random.RandomState(prep_config.seed)
+        random_state.shuffle(indices)
+
+        dataset_train = SubsetDataset(dataset_train_and_val, indices[:train_size].tolist())
+        dataset_val = SubsetDataset(dataset_train_and_val, indices[train_size:].tolist())
+
+        logger.info(f"Train size: {len(dataset_train)}, Val size: {len(dataset_val)}, Test size: {len(dataset_test)}")
+
         sensor_size = tonic.datasets.NMNIST.sensor_size
     elif dataset_name == "CIFAR10DVS":
         dataset = tonic.datasets.CIFAR10DVS(data_root)
         # CIFAR10DVS does not have predefined train/test split so we need to split it ourselves now. the dataset is a list of tuple (events, label)
         dataset_size = len(dataset)
         indices = np.arange(dataset_size)
+        
+        assert 0.0 < prep_config.val_split < 1.0, "val_split must be in (0.0, 1.0)"
+        assert 0.0 < prep_config.test_split < 1.0, "test_split must be in (0.0, 1.0)"
+        
         train_size = int((1 - prep_config.test_split) * dataset_size)
+        val_size = int(prep_config.val_split * train_size)
+        train_size = train_size - val_size
         random_state = np.random.RandomState(prep_config.seed)
         random_state.shuffle(indices)
 
-        dataset_train = SubsetDataset(dataset, indices[:train_size].tolist())
-        dataset_test = SubsetDataset(dataset, indices[train_size:].tolist())
+        train_indices = indices[:train_size].tolist()
+        val_indices = indices[train_size:train_size + val_size].tolist()
+        test_indices = indices[train_size + val_size:].tolist()
 
-        logger.info(f"Train size: {len(dataset_train)}, Test size: {len(dataset_test)}")
+        dataset_train = SubsetDataset(dataset, train_indices)
+        dataset_val = SubsetDataset(dataset, val_indices)
+        dataset_test = SubsetDataset(dataset, test_indices)
+
+        logger.info(f"Train size: {len(dataset_train)}, Val size: {len(dataset_val)}, Test size: {len(dataset_test)}")
 
         sensor_size = tonic.datasets.CIFAR10DVS.sensor_size
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-    return dataset_train, dataset_test, sensor_size
+    return dataset_train, dataset_val, dataset_test, sensor_size
 
 
 def create_transform(prep_config: PrepareDataConfig, sensor_size: tuple):
@@ -169,23 +179,24 @@ def create_transform(prep_config: PrepareDataConfig, sensor_size: tuple):
     return tonic_transforms.Compose(transforms)  # type: ignore
 
 
-def get_datasets(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.TensorDataset, torch.utils.data.TensorDataset]:
+def get_datasets(prep_config: PrepareDataConfig) -> tuple[torch.utils.data.TensorDataset, torch.utils.data.TensorDataset, torch.utils.data.TensorDataset]:
     """Load and preprocess raw dataset with tonic
 
     Returns:
-        Tuple of (train_dataset, test_dataset) wrapped with transforms
+        Tuple of (train_dataset, val_dataset, test_dataset) wrapped with transforms
     """
     # Get raw datasets with correct split (shared logic)
-    dataset_train, dataset_test, sensor_size = get_raw_datasets_with_split(prep_config)
+    dataset_train, dataset_val, dataset_test, sensor_size = get_raw_datasets_with_split(prep_config)
 
     # Create transform pipeline
     transform = create_transform(prep_config, sensor_size)
 
     # Process datasets with transforms
     dataset_train = process_dataset(dataset_train, transform, prep_config)
+    dataset_val = process_dataset(dataset_val, transform, prep_config)
     dataset_test = process_dataset(dataset_test, transform, prep_config)
 
-    return dataset_train, dataset_test
+    return dataset_train, dataset_val, dataset_test
 
 
 def prepare_dataset(prep_config: PrepareDataConfig):
@@ -196,33 +207,34 @@ def prepare_dataset(prep_config: PrepareDataConfig):
     dataset_name = prep_config.name
     logger.info(f"Preparing dataset: {dataset_name}")
 
-    # Get original datasets
-    dataset_train, dataset_test = get_datasets(prep_config)
+    # Get processed datasets
+    train_tensor_dataset, val_tensor_dataset, test_tensor_dataset = get_datasets(prep_config)
 
-    # Convert to tensors
-    train_tensor, train_labels_tensor = dataset_train.tensors
-    test_tensor, test_labels_tensor = dataset_test.tensors
+    # Create PreparedDataset with splits
+    prepared_dataset = PreparedDataset(
+        train=DatasetSplit("train", train_tensor_dataset),
+        val=DatasetSplit("val", val_tensor_dataset),
+        test=DatasetSplit("test", test_tensor_dataset)
+    )
 
-    # Log the shapes
-    logger.info(f"Training data shape: {train_tensor.shape}, labels shape: {train_labels_tensor.shape}")
-    logger.info(f"Test data shape: {test_tensor.shape}, labels shape: {test_labels_tensor.shape}")
+    # Log shapes
+    logger.info(f"Training data shape: {prepared_dataset.train.data.shape}, labels shape: {prepared_dataset.train.labels.shape}")
+    logger.info(f"Validation data shape: {prepared_dataset.val.data.shape}, labels shape: {prepared_dataset.val.labels.shape}")
+    logger.info(f"Test data shape: {prepared_dataset.test.data.shape}, labels shape: {prepared_dataset.test.labels.shape}")
 
     # Save to both storages
-    (scratch_train_path, scratch_test_path), (project_train_path, project_test_path) = save_data_splits(
+    scratch_paths, project_paths = save_data_splits(
         dataset_name=dataset_name,
-        train_tensor=train_tensor,
-        train_labels_tensor=train_labels_tensor,
-        test_tensor=test_tensor,
-        test_labels_tensor=test_labels_tensor,
+        prepared_dataset=prepared_dataset,
         cache_identifier=prep_config.get_cache_identifier()
     )
 
+    # Log file sizes and locations
     logger.info("Data preparation complete.")
-    # log file sizes and locations
     logger.info(f"Cached data saved to:")
     logger.info(f"  Scratch storage (high IO):")
-    logger.info(f"    {scratch_train_path} ({os.path.getsize(scratch_train_path) / (1024**2):.2f} MB)")
-    logger.info(f"    {scratch_test_path}   ({os.path.getsize(scratch_test_path) / (1024**2):.2f} MB)")
+    for path in scratch_paths:
+        logger.info(f"    {path} ({os.path.getsize(path) / (1024**2):.2f} MB)")
     logger.info(f"  Project storage (long-term):")
-    logger.info(f"    {project_train_path} ({os.path.getsize(project_train_path) / (1024**2):.2f} MB)")
-    logger.info(f"    {project_test_path}   ({os.path.getsize(project_test_path) / (1024**2):.2f} MB)")
+    for path in project_paths:
+        logger.info(f"    {path} ({os.path.getsize(path) / (1024**2):.2f} MB)")
