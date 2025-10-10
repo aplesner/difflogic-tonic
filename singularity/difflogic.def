@@ -46,7 +46,8 @@ Stage: build
         ipywidgets \
         notebook \
         ipykernel \
-        pydantic 
+        pydantic \
+        hydra-core
 
     ##################################################
     # Prepare artifacts

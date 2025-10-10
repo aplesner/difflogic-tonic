@@ -8,57 +8,26 @@ from difflut.difflut.utils.modules import GroupSum
 
 
 
-class DiffLUTConfig:
-    def __init__(
-            self,
-            nodetypes: dict,
-            layertypes: dict,
-            n: int = 6,
-            num_layers: int = 2,
-            default_layer: str = "learnable",
-            default_node: str = "neurallut",
-            default_hidden_size: int = 2048,
-            layer_overrides: dict = {},
-        ):
-        self.nodetypes = nodetypes
-        self.layertypes = layertypes
-
-        self.n = n
-
-        self.default_layer = default_layer
-        self.default_node = default_node
-        self.default_hidden_size = default_hidden_size
-
-        self.num_layers = num_layers
-
-        self.layer_overrides = layer_overrides
-
-    def create(self, input_size, num_classes, device):
-        node_regularizers = None  # No regularizers by default
-
-        layer_configs = [
-            {
-                'node': {**self.nodetypes[self.layer_overrides.get(i, {}).get('node', self.default_node)]},
-                'layer': {**self.layertypes[self.layer_overrides.get(i, {}).get('layer', self.default_layer)]},
-                'hidden_size': self.layer_overrides.get(i, {}).get('hidden_size', self.default_hidden_size)
-            } for i in range(self.num_layers)
-        ]
-
-        return DiffLUTModel(
-            input_size=input_size,
-            output_size=num_classes,
-            n=self.n,
-            layer_configs=layer_configs,
-            node_regularizers=node_regularizers,
-        ).to(device)
-
-
 class DiffLUTModel(nn.Module):
     """
     DiffLUT Model built using registry components.
     """
-    def __init__(self, input_size, output_size=10, n=6, layer_configs=[], node_regularizers=None):
+    # def __init__(self, input_size, output_size=10, n=6, layer_configs=[], node_regularizers=None):
+    def __init__(self, config, input_size: int, num_classes: int, device):
         super().__init__()
+
+        node_regularizers = None  # No regularizers by default
+
+        layer_configs = [
+            {
+                'node': {**config.nodetypes[config.layer_overrides.get(i, {}).get('node', config.default_node)]},
+                'layer': {**config.layertypes[config.layer_overrides.get(i, {}).get('layer', config.default_layer)]},
+                'hidden_size': config.layer_overrides.get(i, {}).get('hidden_size', config.default_hidden_size)
+            } for i in range(config.num_layers)
+        ]
+    
+        n = config.n
+        output_size = num_classes
 
         self.layer_configs = layer_configs
         self.node_regularizers = node_regularizers
@@ -80,6 +49,9 @@ class DiffLUTModel(nn.Module):
         
         # Build layers
         layers = []
+        # TODO: is this alright?
+        layers.append(torch.nn.Flatten())
+
         prev_size = input_size
         
         # for i, hidden_size in enumerate(hidden_sizes):
@@ -116,7 +88,8 @@ class DiffLUTModel(nn.Module):
                 # node_type=self.node_class,
                 node_type=node_class,
                 n=n,
-                node_kwargs=node_kwargs
+                node_kwargs=node_kwargs,
+                **layer_kwargs
             )
             layers.append(layer)
             
