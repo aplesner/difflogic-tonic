@@ -24,8 +24,8 @@ data:
   augmentation:
     horizontal_flip_probability: 0.0  # Probability [0.0-1.0] for horizontal flip (0 = disabled)
     vertical_flip_probability: 0.0  # Probability [0.0-1.0] for vertical flip (0 = disabled)
-    random_crop_padding: 0  # Padding for random crop (0 = disabled)
-    salt_pepper_noise: 0.20  # Probability [0.0-1.0] to flip random pixels
+    random_crop_padding: 4  # Padding for random crop (0 = disabled)
+    salt_pepper_noise: 0.05  # Probability [0.0-1.0] to flip random pixels
 
 train:
   epochs: 30
