@@ -2,7 +2,7 @@ base:
   seed: 42
   job_id: "baseline_mlp_run"
   wandb:
-    online: false
+    online: true
     project: "difflogic-tonic"
     entity: null
     run_name: null
@@ -37,8 +37,8 @@ train:
   dtype: bfloat16 # options: float16, bfloat16, float32
   dataloader:
     batch_size: 64
-    num_workers: 6
-    prefetch_factor: 5
+    num_workers: 4
+    prefetch_factor: 2
     pin_memory: true
     shuffle_train: true
   scheduler:

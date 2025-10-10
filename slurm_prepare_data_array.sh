@@ -2,15 +2,15 @@
 #SBATCH --job-name=prep_cifar10dvs
 #SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.out
 #SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.err
-#SBATCH --array=1-4
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=64G
+#SBATCH --array=1-1
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=150G
 #SBATCH --nodes=1
 #SBATCH --time=2:00:00
-#SBATCH --nodelist=arton01,arton02,arton03,arton04,arton05,arton06,arton07,arton08,arton09,arton10,arton11
+#SBATCH --nodelist=arton09,arton10,arton11
 
 # SLURM Job Array Script for Data Preparation
-# Processes 4 different CIFAR10DVS configurations in parallel on arton01 to arton11
+# Processes 2 different CIFAR10DVS configurations in parallel on arton05 to arton11
 # Each job array task processes one configuration variant
 
 # Ensure logs directory exists
@@ -19,9 +19,9 @@ mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
 # Configuration files for each array task
 CONFIG_FILES=(
     "configs/prepare_data/cifar10dvs_events_5k.yaml"
-    "configs/prepare_data/cifar10dvs_events_10k.yaml"
-    "configs/prepare_data/cifar10dvs_events_15k.yaml"
-    "configs/prepare_data/cifar10dvs_events_40k.yaml"
+    # "configs/prepare_data/cifar10dvs_events_10k.yaml"
+    # "configs/prepare_data/cifar10dvs_events_15k.yaml"
+    # "configs/prepare_data/cifar10dvs_events_40k.yaml"
     # "configs/prepare_data/cifar10dvs_time_100ms.yaml"
 )
 
@@ -34,6 +34,7 @@ echo "Job ID: $SLURM_JOB_ID"
 echo "Config: $CONFIG_FILE"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Memory: $SLURM_MEM_PER_NODE MB"
+echo "Node(s): $SLURM_NODELIST"
 echo "========================================"
 echo ""
 

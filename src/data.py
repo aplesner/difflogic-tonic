@@ -47,17 +47,17 @@ class SaltPepperNoise:
         return x
 
 
-class TransformedTensorDataset(Dataset):
-    """Wrapper that applies transforms to TensorDataset samples"""
-    def __init__(self, tensor_dataset: torch.utils.data.TensorDataset, transform=None):
-        self.tensor_dataset = tensor_dataset
+class TransformedDataset(Dataset):
+    """Wrapper that applies transforms to Dataset samples"""
+    def __init__(self, dataset: Dataset, transform=None):
+        self.dataset = dataset
         self.transform = transform
 
     def __len__(self):
-        return len(self.tensor_dataset)
+        return len(self.dataset) #  type: ignore
 
     def __getitem__(self, idx):
-        data, label = self.tensor_dataset[idx]
+        data, label = self.dataset[idx]
         if self.transform:
             data = self.transform(data)
         return data, label
@@ -84,7 +84,7 @@ class OutputClasses(enum.Enum):
     CIFAR10DVS = 10
 
 
-def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
+def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Get dataloaders from pre-prepared cached data
 
     This function ONLY loads pre-prepared datasets. It does NOT prepare data.
@@ -116,6 +116,11 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
         raise
 
     train_dataset = torch.utils.data.TensorDataset(train_cache['data'], train_cache['labels'])
+    # split the train dataset into train and val
+    train_size = int(0.9 * len(train_dataset))
+    val_size = len(train_dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [train_size, val_size])
+
     test_dataset = torch.utils.data.TensorDataset(test_cache['data'], test_cache['labels'])
     # Build transform pipelines using torchvision.transforms.v2
     train_transforms: list[Any] = [
@@ -173,11 +178,12 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
     # Wrap datasets with transforms if any - uses torchvision.transforms.v2.Compose
     if train_transforms:
         train_transform = v2.Compose(train_transforms)
-        train_dataset = TransformedTensorDataset(train_dataset, train_transform)
+        train_dataset = TransformedDataset(train_dataset, train_transform)
 
     if test_transforms:
         test_transform = v2.Compose(test_transforms)
-        test_dataset = TransformedTensorDataset(test_dataset, test_transform)
+        val_dataset = TransformedDataset(val_dataset, test_transform)
+        test_dataset = TransformedDataset(test_dataset, test_transform)
 
     # Create dataloaders with training config
     pin_memory_device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -187,6 +193,16 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
         batch_size=train_config.dataloader.batch_size,
         prefetch_factor=train_config.dataloader.prefetch_factor,
         shuffle=train_config.dataloader.shuffle_train,
+        num_workers=train_config.dataloader.num_workers,
+        pin_memory=train_config.dataloader.pin_memory if torch.cuda.is_available() else False,
+        pin_memory_device=pin_memory_device if train_config.dataloader.pin_memory else ""
+    )
+
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=train_config.dataloader.batch_size,
+        prefetch_factor=train_config.dataloader.prefetch_factor,
+        shuffle=False,
         num_workers=train_config.dataloader.num_workers,
         pin_memory=train_config.dataloader.pin_memory if torch.cuda.is_available() else False,
         pin_memory_device=pin_memory_device if train_config.dataloader.pin_memory else ""
@@ -203,4 +219,4 @@ def get_dataloaders(cfg: config.Config) -> tuple[DataLoader, DataLoader]:
     )
     logger.info(f"Dataloaders created with {len(train_dataset)} train and {len(test_dataset)} test samples")
 
-    return dataloader_train, dataloader_test
+    return dataloader_train, val_dataloader, dataloader_test

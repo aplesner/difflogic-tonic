@@ -2,11 +2,11 @@
 #SBATCH --job-name=train_cifar10dvs
 #SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
 #SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
-#SBATCH --array=1-7
+#SBATCH --array=1-16
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=64G
 #SBATCH --nodes=1
-#SBATCH --time=24:00:00
+#SBATCH --time=2:00:00
 #SBATCH --nodelist=tikgpu06,tikgpu07,tikgpu09
 #SBATCH --gres=gpu:1
 
@@ -15,27 +15,36 @@
 # Runs on tikgpu06, tikgpu07, tikgpu09
 
 # Ensure logs directory exists
-mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
+# mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
 
 # Neuron counts to test
 NEURON_COUNTS=(
     8000
-    12000
     16000
-    24000
     32000
-    48000
     64000
 )
 
-# Select neuron count based on array task ID (1-indexed)
-NEURON_COUNT="${NEURON_COUNTS[$((SLURM_ARRAY_TASK_ID - 1))]}"
+TAU=(
+    0.1
+    1
+    10
+    100
+)
+
+# Select neuron count and tau based on array task ID (1-indexed)
+INDEX=$((SLURM_ARRAY_TASK_ID - 1))
+NEURON_COUNT="${NEURON_COUNTS[$((INDEX % 4))]}"
+TAU_VALUE="${TAU[$((INDEX / 4))]}"
+
+echo "Selected Neuron Count: $NEURON_COUNT"
+echo "Selected Tau: $TAU_VALUE"
 
 # Config file
 CONFIG_FILE="configs/cifar10dvs_difflogic.yaml"
 
 # Job ID based on neuron count
-JOB_ID="neurons_${NEURON_COUNT}"
+JOB_ID="neurons_${NEURON_COUNT}_tau_${TAU_VALUE}_run"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
@@ -66,7 +75,7 @@ echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
 # Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.difflogic.num_neurons=$NEURON_COUNT --override base.wandb.run_name="cifar10dvs_difflogic_${NEURON_COUNT}neurons"
+./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.difflogic.num_neurons=$NEURON_COUNT --override model.difflogic.tau=$TAU_VALUE --override base.wandb.run_name="c10_dlgn_${NEURON_COUNT}neurons_${TAU_VALUE}tau"
 
 # Check return status
 if [ $? -eq 0 ]; then

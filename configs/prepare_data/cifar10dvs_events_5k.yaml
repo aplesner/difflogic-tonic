@@ -22,7 +22,7 @@ data:
   denoise_time: 5000       # Denoise filter time in microseconds (0 to disable)
 
   # Processing settings (multiprocessing)
-  num_threads: 16
+  num_threads: 8
 
   # Dataset splitting
   test_split: 0.2

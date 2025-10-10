@@ -22,6 +22,8 @@ from src.lightning_module import LitModel
 
 
 def main():
+    torch.set_float32_matmul_precision("medium")  # Set to "medium" or "high" for better performance on Ampere+ GPUs
+
     parser = argparse.ArgumentParser(description='Training Script with PyTorch Lightning')
     parser.add_argument('config_file', help='Config file path')
     parser.add_argument('--job_id', default='default', help='Job ID for checkpointing')
@@ -67,7 +69,7 @@ def main():
 
     # Get dataloaders
     logger.info(f"Setting up dataloaders...")
-    train_dataloader, test_dataloader = data.get_dataloaders(cfg)
+    train_dataloader, val_dataloader, test_dataloader = data.get_dataloaders(cfg)
 
     # Get model parameters (accounting for transforms)
     input_shape = helpers.get_model_input_shape(cfg)
@@ -91,6 +93,13 @@ def main():
         offline=not cfg.base.wandb.online,
         save_dir=cfg.train.model_path,
     )
+
+    # Watch model parameters and gradients
+    wandb_logger.watch(lit_model, log="all", log_freq=1000)
+
+    # Log config to WandB
+    if not cfg.base.debug:
+        wandb_logger.experiment.config.update(cfg.model_dump(), allow_val_change=True)
 
     # Setup callbacks
     callbacks = []
@@ -154,16 +163,35 @@ def main():
     trainer.fit(
         model=lit_model,
         train_dataloaders=train_dataloader,
-        val_dataloaders=test_dataloader,
+        val_dataloaders=val_dataloader,
         ckpt_path=args.resume if args.resume else None,
     )
 
     logger.info("Training completed!")
 
+    # Test the model on the best checkpoint
+    logger.info("Starting testing on the best model checkpoint...")
+    trainer.test(
+        model=lit_model,
+        dataloaders=test_dataloader,
+        ckpt_path="best" if checkpoint_callback.best_model_path else None,
+    )
+    logger.info("Testing completed!")
+
     # Log final metrics
     if not cfg.base.debug:
-        logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
-        logger.info(f"Best val/acc: {checkpoint_callback.best_model_score:.4f}")
+        if checkpoint_callback.best_model_path and checkpoint_callback.best_model_score:
+            logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
+            logger.info(f"Best val/acc: {checkpoint_callback.best_model_score:.4f}")
+        elif checkpoint_callback.best_model_path:
+            logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
+            logger.info(f"Best val/acc: Unknown")
+        elif checkpoint_callback.last_model_path:
+            logger.info(f"Last model checkpoint: {checkpoint_callback.last_model_path}")
+        else:
+            logger.info("No model checkpoints were saved.")
+        # Finish WandB run
+        wandb_logger.experiment.finish()
 
 if __name__ == "__main__":
     main()
