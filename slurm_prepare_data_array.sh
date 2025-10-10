@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=prep_cifar10dvs
-#SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.out
-#SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.err
+#SBATCH --output=/itet-stor/davjenny/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.out
+#SBATCH --error=/itet-stor/davjenny/net_scratch/jobs/difflogic-tonic/prepare_data_%A_%a.err
 #SBATCH --array=1-4
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=64G
@@ -14,7 +14,7 @@
 # Each job array task processes one configuration variant
 
 # Ensure logs directory exists
-mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
+mkdir -p /itet-stor/davjenny/net_scratch/jobs/difflogic-tonic/
 
 # Configuration files for each array task
 CONFIG_FILES=(

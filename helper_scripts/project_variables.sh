@@ -1,4 +1,5 @@
-export USER_NAME="aplesner"
+# export USER_NAME="aplesner"
+export USER_NAME="davjenny"
 export PROJECT_NAME="difflogic-tonic"
 export PROJECT_STORAGE_DIR="/itet-stor/${USER_NAME}/net_scratch/projects_storage/${PROJECT_NAME}"
 export SCRATCH_STORAGE_DIR="/scratch/${USER_NAME}/${PROJECT_NAME}"
