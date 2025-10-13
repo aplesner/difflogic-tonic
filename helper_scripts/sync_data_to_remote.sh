@@ -15,7 +15,7 @@ if [ ! -d "$LOCAL_DATA_DIR" ]; then
 fi
 
 # Sync local data to the remote data storage directory
-REMOTE_DIR="${USER_NAME}@${REMOTE_SERVER}:${DATA_STORAGE_DIR}"
+REMOTE_DIR="${USERNAME}@${REMOTE_SERVER}:${DATA_STORAGE_DIR}"
 
 # Sync the data to the remote directory
 rsync -av --info=progress2 \

@@ -1,10 +1,10 @@
-export USER_NAME="aplesner"
+export USERNAME=$(whoami)
 export PROJECT_NAME="difflogic-tonic"
-export PROJECT_STORAGE_DIR="/itet-stor/${USER_NAME}/net_scratch/projects_storage/${PROJECT_NAME}"
-export SCRATCH_STORAGE_DIR="/scratch/${USER_NAME}/${PROJECT_NAME}"
+export PROJECT_STORAGE_DIR="/itet-stor/${USERNAME}/net_scratch/projects_storage/${PROJECT_NAME}"
+export SCRATCH_STORAGE_DIR="/scratch/${USERNAME}/${PROJECT_NAME}"
 
 export REMOTE_SERVER="tik42x.ethz.ch"
-export CODE_STORAGE_DIR="/home/${USER_NAME}/code/${PROJECT_NAME}"
+export CODE_STORAGE_DIR="/home/${USERNAME}/code/${PROJECT_NAME}"
 export DATA_STORAGE_DIR="${PROJECT_STORAGE_DIR}/data"
 export MODEL_STORAGE_DIR="${PROJECT_STORAGE_DIR}/models"
 export SINGULARITY_SCRATCH_STORAGE_DIR="${SCRATCH_STORAGE_DIR}/singularity"

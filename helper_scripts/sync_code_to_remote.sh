@@ -7,7 +7,7 @@ if [ "${PROJECT_NAME}" != "difflogic-tonic" ]; then
 fi
 
 # Define the remote directory
-REMOTE_DIR="${USER_NAME}@${REMOTE_SERVER}:${CODE_STORAGE_DIR}"
+REMOTE_DIR="${USERNAME}@${REMOTE_SERVER}:${CODE_STORAGE_DIR}"
 
 # Use rsync to sync to remote
 rsync -avz --progress \

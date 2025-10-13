@@ -7,7 +7,7 @@ if [ "$PROJECT_NAME" != "difflogic-tonic" ]; then
 fi
 
 # Sync the singularity container to the remote directory
-REMOTE_DIR="${USER_NAME}@${REMOTE_SERVER}:${SINGULARITY_STORAGE_DIR}"
+REMOTE_DIR="${USERNAME}@${REMOTE_SERVER}:${SINGULARITY_STORAGE_DIR}"
 
 # Sync the container to the remote directory
 rsync -av --info=progress3\
