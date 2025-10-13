@@ -1,0 +1,30 @@
+# @package _global_
+
+model:
+  model_type: DiffLUT
+  difflut:
+    nodetypes:
+      linearlut:
+        node_type: linear_lut
+      neurallut:
+        node_type: neurallut
+        hidden_width: 16
+        depth: 2
+        skip_interval: 2
+        activation: leakyrelu
+
+    layertypes:
+      learnable:
+        layer_type: learnable
+        tau: 0.1
+
+    n: 6
+    num_layers: 2
+    default_layer: learnable
+    default_node: neurallut
+    default_hidden_size: 2048
+    layer_overrides: {}
+
+base:
+  wandb:
+    tags: ["difflut"]

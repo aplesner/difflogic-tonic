@@ -1,9 +1,0 @@
-# CIFAR10 dataset configuration
-name: cifar10
-data_dir: ../data
-batch_size: 128
-subset_size: 10000
-test_subset_size: 1000
-num_workers: 0
-
-

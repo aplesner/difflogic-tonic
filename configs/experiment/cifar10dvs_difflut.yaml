@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /dataset: cifar10dvs
+  - override /model: difflut
+
+base:
+  job_id: "cifar10dvs_difflut"

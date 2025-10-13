@@ -40,7 +40,7 @@ from .encoder import (
     LogarithmicEncoder,
 )
 
-__version__ = "0.1.0"
+__version__ = "1.0.10"
 
 __all__ = [
     # Registry
