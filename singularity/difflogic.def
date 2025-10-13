@@ -39,6 +39,7 @@ Stage: build
         difflogic \
         wandb \
         omegaconf \
+        hydra-core \
         tonic \
         aedat \
         lightning \
