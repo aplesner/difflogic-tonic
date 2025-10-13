@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=train_cifar10dvs
-#SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
-#SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
+#SBATCH --output=/itet-stor/%u/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
+#SBATCH --error=/itet-stor/%u/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
 #SBATCH --cpus-per-task=8
 #SBATCH --array=1-3
 #SBATCH --mem=40G
@@ -15,7 +15,8 @@
 # Runs on tikgpu06, tikgpu07, tikgpu09
 
 # Ensure logs directory exists
-# mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
+export USERNAME=$(whoami)
+mkdir -p "/itet-stor/${USERNAME}/net_scratch/jobs/difflogic-tonic/"
 
 TAU_VALUES=(1 10 100)
 

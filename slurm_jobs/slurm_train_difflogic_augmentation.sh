@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=train_cifar10dvs
-#SBATCH --output=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
-#SBATCH --error=/itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
+#SBATCH --output=/itet-stor/%u/net_scratch/jobs/difflogic-tonic/train_%A_%a.out
+#SBATCH --error=/itet-stor/%u/net_scratch/jobs/difflogic-tonic/train_%A_%a.err
 #SBATCH --array=1-4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
@@ -11,7 +11,8 @@
 #SBATCH --gres=gpu:1
 
 # Ensure logs directory exists
-mkdir -p /itet-stor/aplesner/net_scratch/jobs/difflogic-tonic/
+export USERNAME=$(whoami)
+mkdir -p /itet-stor/${USERNAME}/net_scratch/jobs/difflogic-tonic/
 
 
 # run these pairs: (0.0,0), (0.0,2), (0.0,4), and (0.05,0) of salt and pepper noise and random crop sizes
