@@ -1,55 +1,13 @@
 #!/bin/bash
-
-# Training script with Hydra configuration
-# Usage: ./train_hydra.sh [experiment=NAME] [KEY=VALUE...]
-#
-# Examples:
-#   ./train_hydra.sh experiment=nmnist_difflogic
-#   ./train_hydra.sh experiment=cifar10dvs_difflogic base.job_id=my_job
-#   ./train_hydra.sh dataset=nmnist model=mlp train.epochs=50
-#   ./train_hydra.sh experiment=nmnist_difflogic +debug=true
-
 set -e
-
-echo "Starting Hydra training..."
-echo "Arguments: $@"
-echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
 
 export WANDB_CACHE_DIR=${SCRATCH_STORAGE_DIR:-./scratch}/wandb_cache
 
-# Use singularity if SINGULARITY_CONTAINER is set
-if [ -n "$SINGULARITY_CONTAINER" ]; then
-    echo "Using Singularity container: $SINGULARITY_CONTAINER"
-
-    # Sync container if needed (from project storage to local/scratch)
-    if [ ! -f "$SINGULARITY_CONTAINER" ]; then
-        echo "Container not found locally. Checking project storage..."
-
-        # Try to find container in project storage
-        CONTAINER_NAME=$(basename "$SINGULARITY_CONTAINER")
-        PROJECT_CONTAINER="${PROJECT_STORAGE_DIR}/singularity/${CONTAINER_NAME}"
-
-        if [ -f "$PROJECT_CONTAINER" ]; then
-            echo "Syncing container from project storage..."
-            CONTAINER_DIR=$(dirname "$SINGULARITY_CONTAINER")
-            mkdir -p "$CONTAINER_DIR"
-            rsync -avh --progress "$PROJECT_CONTAINER" "$SINGULARITY_CONTAINER"
-            echo "Container synced successfully"
-        else
-            echo "Error: Container not found in project storage: $PROJECT_CONTAINER"
-            exit 1
-        fi
-    else
-        echo "Container found: $SINGULARITY_CONTAINER"
-    fi
-
-    mkdir -p ${SCRATCH_STORAGE_DIR:-./scratch/}
-
-    SINGULARITY_CMD="singularity exec --nv --bind $PROJECT_STORAGE_DIR,$SCRATCH_STORAGE_DIR $SINGULARITY_CONTAINER"
-    $SINGULARITY_CMD python3 main_hydra.py "$@"
+if [ -n "$SINGULARITY_CONTAINER_SCRATCH" ]; then
+    [ ! -f "$SINGULARITY_CONTAINER_SCRATCH" ] && rsync -ah "$SINGULARITY_CONTAINER_PROJECT" "$SINGULARITY_CONTAINER_SCRATCH"
+    mkdir -p ${SCRATCH_STORAGE_DIR:-./scratch}
+    singularity exec --nv --bind $PROJECT_STORAGE_DIR,$SCRATCH_STORAGE_DIR $SINGULARITY_CONTAINER_SCRATCH python3 main.py "$@"
 else
-    # Add current directory to Python path for src/ imports
     export PYTHONPATH="${PYTHONPATH}:."
-
-    python3 main_hydra.py "$@"
+    python3 main.py "$@"
 fi

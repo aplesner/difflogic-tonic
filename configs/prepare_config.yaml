@@ -1,6 +1,4 @@
 # @package _global_
-# Base configuration for data preparation
-# Use Hydra composition to override specific sections
 
 defaults:
   - prepare: nmnist
@@ -10,32 +8,15 @@ base:
   seed: 42
 
 data:
-  # Dataset name - must be set by prepare/* configs
   name: ???
-
-  # Storage paths (will use SCRATCH_STORAGE_DIR if set)
   data_root: data/
-
-  # Frame slicing mode
-  frame_mode: event_count  # Options: event_count, time_window
-
-  # Event count mode parameters
+  frame_mode: event_count
   events_per_frame: 5000
-
-  # Time window mode parameters (in microseconds)
   time_window: null
-
-  # Common parameters
-  overlap: 0.0  # Overlap between frames (0.0-1.0 for event_count, microseconds for time_window)
-  denoise_time: 1000  # Denoise filter in microseconds (0 to disable)
-
-  # Processing settings
+  overlap: 0.0
+  denoise_time: 1000
   num_threads: 6
-
-  # Dataset splitting
-  test_split: 0.1   # Only used for datasets without predefined splits
-  val_split: 0.1    # Fraction of training data for validation
-
-  # Cache control
+  test_split: 0.1
+  val_split: 0.1
   reset_cache: false
-  output_suffix: null  # Optional custom cache identifier
+  output_suffix: null

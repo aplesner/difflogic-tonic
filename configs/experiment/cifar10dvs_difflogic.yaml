@@ -1,5 +1,4 @@
 # @package _global_
-# CIFAR10-DVS + DiffLogic experiment
 
 defaults:
   - override /dataset: cifar10dvs

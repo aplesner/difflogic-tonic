@@ -23,9 +23,7 @@ This file tracks tasks, improvements, and known issues for the DiffLogic Tonic p
 - [ ] 🟡 Prepare WandB sweeps integration with Hydra
 - [ ] 🟡 Update container with hydra-core dependency
 
-**Why**: Current configs have redundancy and repetition. Hydra provides cleaner CLI overrides and better composition.
-
-**Status**: ✅ Core migration complete! Legacy scripts in `legacy/` folder. See [docs/HYDRA_MIGRATION.md](HYDRA_MIGRATION.md).
+**Status**: ✅ Core migration complete! Legacy scripts in `legacy/` folder.
 
 ### SLURM & Cluster Tools
 - [✅] 🟡 Add container rsync to train.sh (pre-flight sync)

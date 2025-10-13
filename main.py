@@ -1,7 +1,7 @@
 import logging
+from typing import Any
 from omegaconf import DictConfig, OmegaConf
 import hydra
-from hydra.core.config_store import ConfigStore
 
 # setup logging
 logging.basicConfig(
@@ -37,64 +37,64 @@ def main(cfg: DictConfig) -> None:
     if not isinstance(config_dict, dict):
         raise ValueError("Configuration must be a dictionary at the top level.")
 
-    cfg_validated = config.Config(**config_dict)
+    config_obj = config.Config(**config_dict) # pyright: ignore[reportCallIssue]
 
     # Debug mode handling
-    if cfg_validated.base.debug:
+    if config_obj.base.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
 
     # Setup seed for reproducibility
-    helpers.setup_seed(cfg_validated.base.seed)
-    L.seed_everything(cfg_validated.base.seed, workers=True)
+    helpers.setup_seed(config_obj.base.seed)
+    L.seed_everything(config_obj.base.seed, workers=True)
 
-    logger.info(f"Using job ID: {cfg_validated.base.job_id}")
-    logger.info(f"Using device: {cfg_validated.train.device}")
+    logger.info(f"Using job ID: {config_obj.base.job_id}")
+    logger.info(f"Using device: {config_obj.train.device}")
 
     # Get dataloaders
     logger.info(f"Setting up dataloaders...")
-    train_dataloader, val_dataloader, test_dataloader = data.get_dataloaders(cfg_validated)
+    train_dataloader, val_dataloader, test_dataloader = data.get_dataloaders(config_obj)
 
     # Get model parameters (accounting for transforms)
-    input_shape = helpers.get_model_input_shape(cfg_validated)
-    num_classes = helpers.get_num_classes(cfg_validated.data)
+    input_shape = helpers.get_model_input_shape(config_obj)
+    num_classes = helpers.get_num_classes(config_obj.data)
     logger.info(f"Input shape: {input_shape}, Num classes: {num_classes}")
 
     # Create model
-    net = model.create_model(config=cfg_validated, input_shape=input_shape, num_classes=num_classes)
-    logger.info(f"Model: {cfg_validated.model.model_type} with input shape {input_shape}")
+    net = model.create_model(config=config_obj, input_shape=input_shape, num_classes=num_classes)
+    logger.info(f"Model: {config_obj.model.model_type} with input shape {input_shape}")
 
     # Wrap model in Lightning module
-    lit_model = LitModel(model=net, cfg=cfg_validated, num_classes=num_classes)
+    lit_model = LitModel(model=net, cfg=config_obj, num_classes=num_classes)
 
     # Setup WandB logger
     wandb_logger = WandbLogger(
-        project=cfg_validated.base.wandb.project,
-        entity=cfg_validated.base.wandb.entity,
-        name=cfg_validated.base.wandb.run_name if cfg_validated.base.wandb.run_name else f"{cfg_validated.base.job_id}_{cfg_validated.model.model_type}",
-        tags=cfg_validated.base.wandb.tags,
-        notes=cfg_validated.base.wandb.notes,
-        offline=not cfg_validated.base.wandb.online,
-        save_dir=cfg_validated.train.model_path,
+        project=config_obj.base.wandb.project,
+        entity=config_obj.base.wandb.entity,
+        name=config_obj.base.wandb.run_name if config_obj.base.wandb.run_name else f"{config_obj.base.job_id}_{config_obj.model.model_type}",
+        tags=config_obj.base.wandb.tags,
+        notes=config_obj.base.wandb.notes,
+        offline=not config_obj.base.wandb.online,
+        save_dir=config_obj.train.model_path,
     )
 
     # Watch model parameters and gradients
     wandb_logger.watch(lit_model, log="all", log_freq=1000)
 
     # Log config to WandB
-    if not cfg_validated.base.debug:
-        wandb_logger.experiment.config.update(cfg_validated.model_dump(), allow_val_change=True)
+    if not config_obj.base.debug:
+        wandb_logger.experiment.config.update(config_obj.model_dump(), allow_val_change=True)
 
     # Setup callbacks
     callbacks = []
 
     # Model checkpointing
     checkpoint_callback = ModelCheckpoint(
-        dirpath=f"{cfg_validated.train.model_path}/{cfg_validated.base.job_id}",
+        dirpath=f"{config_obj.train.model_path}/{config_obj.base.job_id}",
         filename='{epoch:02d}-{val/acc:.4f}',
         monitor='val/acc',
         mode='max',
-        save_top_k=3 if cfg_validated.train.save_model else 0,
+        save_top_k=2 if config_obj.train.save_model else 0,
         save_last=True,
         verbose=True,
     )
@@ -105,45 +105,45 @@ def main(cfg: DictConfig) -> None:
     callbacks.append(lr_monitor)
 
     # Early stopping (if enabled)
-    if cfg_validated.train.early_stopping.enabled:
+    if config_obj.train.early_stopping.enabled:
         early_stop_callback = EarlyStopping(
-            monitor=cfg_validated.train.early_stopping.monitor,
-            patience=cfg_validated.train.early_stopping.patience,
-            mode=cfg_validated.train.early_stopping.mode,
-            min_delta=cfg_validated.train.early_stopping.min_delta,
+            monitor=config_obj.train.early_stopping.monitor,
+            patience=config_obj.train.early_stopping.patience,
+            mode=config_obj.train.early_stopping.mode,
+            min_delta=config_obj.train.early_stopping.min_delta,
             verbose=True,
         )
         callbacks.append(early_stop_callback)
-        logger.info(f"Early stopping enabled: monitor={cfg_validated.train.early_stopping.monitor}, patience={cfg_validated.train.early_stopping.patience}")
+        logger.info(f"Early stopping enabled: monitor={config_obj.train.early_stopping.monitor}, patience={config_obj.train.early_stopping.patience}")
 
     # Determine precision
     precision = "32"
-    if cfg_validated.train.dtype == torch.float16:
+    if config_obj.train.dtype == torch.float16:
         precision = "16-mixed"
-    elif cfg_validated.train.dtype == torch.bfloat16:
+    elif config_obj.train.dtype == torch.bfloat16:
         precision = "bf16-mixed"
     logger.info(f"Training precision: {precision}")
 
     # Create Lightning Trainer
     trainer = L.Trainer(
-        max_epochs=cfg_validated.train.epochs,
+        max_epochs=config_obj.train.epochs,
         accelerator="auto",
         devices="auto",
         precision=precision,
         logger=wandb_logger,
         callbacks=callbacks,
-        log_every_n_steps=cfg_validated.train.lightning.log_every_n_steps,
-        enable_progress_bar=cfg_validated.train.lightning.enable_progress_bar,
-        gradient_clip_val=cfg_validated.train.lightning.gradient_clip_val,
-        accumulate_grad_batches=cfg_validated.train.lightning.accumulate_grad_batches,
-        check_val_every_n_epoch=cfg_validated.train.lightning.check_val_every_n_epoch,
-        num_sanity_val_steps=cfg_validated.train.lightning.num_sanity_val_steps if not cfg_validated.base.debug else 0,
-        fast_dev_run=cfg_validated.base.debug,
+        log_every_n_steps=config_obj.train.lightning.log_every_n_steps,
+        enable_progress_bar=config_obj.train.lightning.enable_progress_bar,
+        gradient_clip_val=config_obj.train.lightning.gradient_clip_val,
+        accumulate_grad_batches=config_obj.train.lightning.accumulate_grad_batches,
+        check_val_every_n_epoch=config_obj.train.lightning.check_val_every_n_epoch,
+        num_sanity_val_steps=config_obj.train.lightning.num_sanity_val_steps if not config_obj.base.debug else 0,
+        fast_dev_run=config_obj.base.debug,
         deterministic=True,
     )
 
     # Train the model
-    logger.info(f"Starting training for {cfg_validated.train.epochs} epochs...")
+    logger.info(f"Starting training for {config_obj.train.epochs} epochs...")
     trainer.fit(
         model=lit_model,
         train_dataloaders=train_dataloader,
@@ -162,7 +162,7 @@ def main(cfg: DictConfig) -> None:
     logger.info("Testing completed!")
 
     # Log final metrics
-    if not cfg_validated.base.debug:
+    if not config_obj.base.debug:
         if checkpoint_callback.best_model_path and checkpoint_callback.best_model_score:
             logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
             logger.info(f"Best val/acc: {checkpoint_callback.best_model_score:.4f}")

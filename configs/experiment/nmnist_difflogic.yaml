@@ -1,5 +1,4 @@
 # @package _global_
-# NMNIST + DiffLogic experiment
 
 defaults:
   - override /dataset: nmnist
@@ -7,8 +6,3 @@ defaults:
 
 base:
   job_id: "nmnist_difflogic"
-  wandb:
-    online: false
-
-train:
-  epochs: 10

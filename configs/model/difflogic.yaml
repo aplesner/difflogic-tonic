@@ -1,5 +1,4 @@
 # @package _global_
-# DiffLogic model configuration
 
 model:
   model_type: DiffLogic

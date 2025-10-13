@@ -1,5 +1,4 @@
 # @package _global_
-# MLP baseline model configuration
 
 model:
   model_type: MLP

@@ -1,5 +1,4 @@
 # @package _global_
-# NMNIST + MLP baseline experiment
 
 defaults:
   - override /dataset: nmnist
@@ -7,8 +6,6 @@ defaults:
 
 base:
   job_id: "nmnist_mlp"
-  wandb:
-    online: false
 
 train:
   epochs: 3

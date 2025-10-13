@@ -1,5 +1,4 @@
 # @package _global_
-# NMNIST dataset configuration
 
 data:
   name: NMNIST

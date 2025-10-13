@@ -1,8 +1,6 @@
 # @package _global_
-# 10ms time window variant
 
 data:
   frame_mode: time_window
-  events_per_frame: null
-  time_window: 10000  # microseconds
+  time_window: 10000
   overlap: 0.0

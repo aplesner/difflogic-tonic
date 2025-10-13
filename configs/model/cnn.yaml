@@ -1,5 +1,4 @@
 # @package _global_
-# CNN baseline model configuration
 
 model:
   model_type: CNN

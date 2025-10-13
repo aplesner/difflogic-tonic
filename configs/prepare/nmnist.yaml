@@ -1,5 +1,4 @@
 # @package _global_
-# NMNIST data preparation
 
 data:
   name: NMNIST
@@ -8,4 +7,3 @@ data:
   denoise_time: 1200
   num_threads: 12
   val_split: 0.05
-  reset_cache: false

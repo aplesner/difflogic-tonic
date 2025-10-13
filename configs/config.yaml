@@ -1,6 +1,4 @@
 # @package _global_
-# Base configuration for training
-# Use Hydra composition to override specific sections
 
 defaults:
   - dataset: nmnist
@@ -20,16 +18,9 @@ base:
     notes: null
 
 data:
-  # Dataset name set by dataset/* configs
-  name: ???  # Must be overridden
-
-  # Optional: specify cached dataset variant
+  name: ???
   cache_identifier: null
-
-  # Input transforms
-  downsample_pool_size: null  # Max pooling (null = disabled)
-
-  # Data augmentation (training only)
+  downsample_pool_size: null
   augmentation:
     horizontal_flip_probability: 0.0
     vertical_flip_probability: 0.0
@@ -45,15 +36,13 @@ train:
   checkpoint_interval_minutes: 10.0
   model_path: models/
   device: cuda
-  dtype: float16  # options: float16, bfloat16, float32
-
+  dtype: float16
   dataloader:
     batch_size: 64
     num_workers: 4
     prefetch_factor: 2
     pin_memory: true
     shuffle_train: true
-
   scheduler:
     enabled: false
     type: "step"
@@ -62,14 +51,12 @@ train:
     min_lr: 1e-6
     factor: 0.5
     patience: 5
-
   early_stopping:
     enabled: false
     monitor: "val/acc"
     patience: 10
     mode: "max"
     min_delta: 0.0
-
   lightning:
     enable_progress_bar: true
     log_every_n_steps: 50
@@ -79,5 +66,4 @@ train:
     num_sanity_val_steps: 2
 
 model:
-  # Model type set by model/* configs
-  model_type: ???  # Must be overridden
+  model_type: ???

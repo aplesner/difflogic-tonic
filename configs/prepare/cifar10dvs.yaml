@@ -1,5 +1,4 @@
 # @package _global_
-# CIFAR10-DVS data preparation
 
 data:
   name: CIFAR10DVS
@@ -9,4 +8,3 @@ data:
   num_threads: 16
   test_split: 0.15
   val_split: 0.05
-  reset_cache: false

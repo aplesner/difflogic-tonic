@@ -1,7 +1,5 @@
 # @package _global_
-# 20k events per frame variant
 
 data:
-  frame_mode: event_count
   events_per_frame: 20000
   overlap: 0.0
