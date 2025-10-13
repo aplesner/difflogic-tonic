@@ -1,0 +1,12 @@
+# @package _global_
+# CNN baseline model configuration
+
+model:
+  model_type: CNN
+  cnn:
+    num_conv_layers: 3
+    base_channels: 32
+
+base:
+  wandb:
+    tags: ["cnn"]

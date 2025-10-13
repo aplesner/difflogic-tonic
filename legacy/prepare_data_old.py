@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
+import argparse
+import sys
 import logging
 from pathlib import Path
-from omegaconf import DictConfig, OmegaConf
-import hydra
 
 from src.io_funcs import get_scratch_dir, get_project_storage_dir, get_data_paths
 from src.prepare_data import PrepareDataConfig, prepare_dataset
@@ -16,42 +16,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def main():
+    parser = argparse.ArgumentParser(
+        description='Prepare and cache event-based dataset',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  python3 prepare_data.py config_nmnist.yaml
+  python3 prepare_data.py config_cifar10dvs.yaml
 
-@hydra.main(version_base=None, config_path="configs", config_name="prepare_config")
-def main(cfg: DictConfig) -> None:
-    """Data preparation with Hydra configuration management
+This script processes raw event-based datasets and caches them as TensorDatasets
+for fast loading during training. Data is saved to both scratch (high IO) and
+project storage (long-term).
 
-    Args:
-        cfg: Hydra configuration (OmegaConf DictConfig)
-    """
+Environment Variables:
+  SCRATCH_STORAGE_DIR - If set, uses this path for scratch storage and metadata
+        '''
+    )
+    parser.add_argument('config_file', help='Config file path (e.g., config_nmnist.yaml)')
+
+    args = parser.parse_args()
+
+    if not Path(args.config_file).exists():
+        logger.error(f"Config file '{args.config_file}' not found")
+        sys.exit(1)
+
     logger.info(f"=== Data Preparation ===")
+    logger.info(f"Config file: {args.config_file}")
 
-    # Convert OmegaConf to Pydantic config for validation
-    config_dict = OmegaConf.to_container(cfg, resolve=True)
-    if not isinstance(config_dict, dict):
-        raise ValueError("Configuration must be a dictionary at the top level.")
-
-    # Build preparation config from relevant fields
-    data_section = config_dict.get('data', {})
-    base_section = config_dict.get('base', {})
-
-    prep_config_dict = {
-        'name': data_section.get('name'),
-        'data_root': data_section.get('data_root', 'data/'),
-        'frame_mode': data_section.get('frame_mode', 'event_count'),
-        'events_per_frame': data_section.get('events_per_frame'),
-        'time_window': data_section.get('time_window'),
-        'overlap': data_section.get('overlap', 0.0),
-        'denoise_time': data_section.get('denoise_time', 1000),
-        'num_threads': data_section.get('num_threads', 6),
-        'test_split': data_section.get('test_split', 0.1),
-        'val_split': data_section.get('val_split', 0.1),
-        'reset_cache': data_section.get('reset_cache', False),
-        'output_suffix': data_section.get('output_suffix'),
-        'seed': base_section.get('seed', 42),
-    }
-
-    prep_config = PrepareDataConfig(**prep_config_dict)
+    # Load preparation config from YAML
+    prep_config = PrepareDataConfig.from_yaml(args.config_file)
     dataset_name = prep_config.name
 
     logger.info(f"Dataset: {dataset_name}")
@@ -74,6 +68,7 @@ def main(cfg: DictConfig) -> None:
     logger.info(f"  Scratch storage: {scratch_dir}")
     logger.info(f"  Project storage: {project_dir}")
     logger.info("")
+
 
     # Check if cache exists and reset_cache is False
     cache_identifier = prep_config.get_cache_identifier()
@@ -102,7 +97,7 @@ def main(cfg: DictConfig) -> None:
         prepare_dataset(prep_config)
         logger.info("")
 
-    # Show final cache status
+    # Show final cache status (paths already computed above)
     logger.info("=== Cache Status ===")
 
     for path, desc in [
@@ -121,7 +116,6 @@ def main(cfg: DictConfig) -> None:
 
     logger.info("")
     logger.info("Data preparation complete! You can now run training.")
-
 
 if __name__ == "__main__":
     main()

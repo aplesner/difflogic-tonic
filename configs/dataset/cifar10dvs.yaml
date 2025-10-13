@@ -1,0 +1,10 @@
+# @package _global_
+# CIFAR10-DVS dataset configuration
+
+data:
+  name: CIFAR10DVS
+  downsample_pool_size: 2  # 128x128 -> 64x64
+
+base:
+  wandb:
+    tags: ["cifar10dvs"]

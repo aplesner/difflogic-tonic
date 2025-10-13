@@ -1,0 +1,9 @@
+# @package _global_
+# NMNIST dataset configuration
+
+data:
+  name: NMNIST
+
+base:
+  wandb:
+    tags: ["nmnist"]

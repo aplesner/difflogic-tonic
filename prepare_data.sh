@@ -1,46 +1,35 @@
 #!/bin/bash
 
-# Data preparation script
-# Usage: ./prepare_data.sh <config_file>
+# Data preparation script with Hydra configuration
+# Usage: ./prepare_data_hydra.sh [prepare=NAME] [KEY=VALUE...]
+#
+# Examples:
+#   ./prepare_data_hydra.sh prepare=nmnist
+#   ./prepare_data_hydra.sh prepare=cifar10dvs prepare/variants=events_20k
+#   ./prepare_data_hydra.sh prepare=cifar10dvs data.reset_cache=true
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <config_file>"
-    echo "Example: $0 config_nmnist.yaml"
-    exit 1
-fi
+set -e
 
-CONFIG_FILE=$1
-
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Config file '$CONFIG_FILE' not found"
-    exit 1
-fi
-
-echo "=== Data Preparation Script ==="
-echo "Config: $CONFIG_FILE"
+echo "Starting Hydra data preparation..."
+echo "Arguments: $@"
 echo "SCRATCH_STORAGE_DIR: ${SCRATCH_STORAGE_DIR:-not set (using default './scratch/')}"
-echo ""
 
-# Use singularity if SINGULARITY_CONTAINER is set and bind the project and scratch directories
+# Use singularity if SINGULARITY_CONTAINER is set
 if [ -n "$SINGULARITY_CONTAINER" ]; then
     echo "Using Singularity container: $SINGULARITY_CONTAINER"
+
+    if [ ! -f "$SINGULARITY_CONTAINER" ]; then
+        echo "Error: Container not found: $SINGULARITY_CONTAINER"
+        exit 1
+    fi
+
     mkdir -p ${SCRATCH_STORAGE_DIR:-./scratch/}
 
     SINGULARITY_CMD="singularity exec --nv --bind $PROJECT_STORAGE_DIR,$SCRATCH_STORAGE_DIR $SINGULARITY_CONTAINER"
-    $SINGULARITY_CMD python3 prepare_data.py "$CONFIG_FILE"
+    $SINGULARITY_CMD python3 prepare_data_hydra.py "$@"
 else
     # Add current directory to Python path for src/ imports
     export PYTHONPATH="${PYTHONPATH}:."
 
-    # Run data preparation
-    python3 prepare_data.py "$CONFIG_FILE"
+    python3 prepare_data_hydra.py "$@"
 fi
-
-# Check return status
-if [ $? -ne 0 ]; then
-    echo "Data preparation failed!"
-    exit 1
-fi
-
-echo ""
-echo "Data preparation complete! You can now run training scripts."

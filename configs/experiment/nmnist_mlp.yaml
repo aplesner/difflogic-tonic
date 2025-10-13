@@ -1,0 +1,15 @@
+# @package _global_
+# NMNIST + MLP baseline experiment
+
+defaults:
+  - override /dataset: nmnist
+  - override /model: mlp
+
+base:
+  job_id: "nmnist_mlp"
+  wandb:
+    online: false
+
+train:
+  epochs: 3
+  learning_rate: 1e-3

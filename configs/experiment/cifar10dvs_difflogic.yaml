@@ -1,0 +1,24 @@
+# @package _global_
+# CIFAR10-DVS + DiffLogic experiment
+
+defaults:
+  - override /dataset: cifar10dvs
+  - override /model: difflogic
+
+base:
+  job_id: "cifar10dvs_difflogic"
+  wandb:
+    online: true
+
+data:
+  augmentation:
+    random_crop_padding: 4
+    salt_pepper_noise: 0.05
+
+train:
+  epochs: 30
+  debugging_steps: 1000
+
+model:
+  difflogic:
+    num_neurons: 32000

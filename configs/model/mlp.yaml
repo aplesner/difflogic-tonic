@@ -1,0 +1,18 @@
+# @package _global_
+# MLP baseline model configuration
+
+model:
+  model_type: MLP
+  mlp:
+    hidden_size: 512
+    num_hidden_layers: 1
+
+train:
+  dtype: bfloat16
+  dataloader:
+    num_workers: 6
+    prefetch_factor: 5
+
+base:
+  wandb:
+    tags: ["mlp"]

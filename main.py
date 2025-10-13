@@ -1,5 +1,7 @@
-import argparse
 import logging
+from omegaconf import DictConfig, OmegaConf
+import hydra
+from hydra.core.config_store import ConfigStore
 
 # setup logging
 logging.basicConfig(
@@ -21,96 +23,78 @@ from src import helpers
 from src.lightning_module import LitModel
 
 
-def main():
-    torch.set_float32_matmul_precision("medium")  # Set to "medium" or "high" for better performance on Ampere+ GPUs
+@hydra.main(version_base=None, config_path="configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """Main training function with Hydra configuration management
 
-    parser = argparse.ArgumentParser(description='Training Script with PyTorch Lightning')
-    parser.add_argument('config_file', help='Config file path')
-    parser.add_argument('--job_id', default='default', help='Job ID for checkpointing')
-    parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint to resume from')
-    parser.add_argument('--debug', action='store_true', help='Enable debug mode with verbose logging')
-    parser.add_argument('--override', action='append', help='Override config values using dotted notation')
+    Args:
+        cfg: Hydra configuration (OmegaConf DictConfig)
+    """
+    torch.set_float32_matmul_precision("medium")
 
-    args = parser.parse_args()
+    # Convert OmegaConf to Pydantic config for validation and type checking
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(config_dict, dict):
+        raise ValueError("Configuration must be a dictionary at the top level.")
 
-    # If debug, set logging to DEBUG level across all modules
-    if args.debug:
+    cfg_validated = config.Config(**config_dict)
+
+    # Debug mode handling
+    if cfg_validated.base.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
-        # Also set debug in config
-        if not args.override:
-            args.override = []
-        args.override.append("base.debug=True")
-
-    # Parse CLI overrides (supports space-separated values in a single --override)
-    overrides = []
-    if args.override:
-        for override_group in args.override:
-            overrides.extend(override_group.split())
-
-    # Load config with CLI overrides
-    cfg = config.Config.from_yaml(args.config_file, overrides=overrides if overrides else None)
-    if overrides:
-        logger.info(f"Applied config overrides: {overrides}")
 
     # Setup seed for reproducibility
-    helpers.setup_seed(cfg.base.seed)
-    L.seed_everything(cfg.base.seed, workers=True)
+    helpers.setup_seed(cfg_validated.base.seed)
+    L.seed_everything(cfg_validated.base.seed, workers=True)
 
-    # If job_id provided via CLI, override config
-    if args.job_id:
-        cfg.base.job_id = args.job_id
-    if not cfg.base.job_id:
-        cfg.base.job_id = "default"
-    logger.info(f"Using job ID: {cfg.base.job_id}")
-
-    # Setup device
-    logger.info(f"Using device: {cfg.train.device}")
+    logger.info(f"Using job ID: {cfg_validated.base.job_id}")
+    logger.info(f"Using device: {cfg_validated.train.device}")
 
     # Get dataloaders
     logger.info(f"Setting up dataloaders...")
-    train_dataloader, val_dataloader, test_dataloader = data.get_dataloaders(cfg)
+    train_dataloader, val_dataloader, test_dataloader = data.get_dataloaders(cfg_validated)
 
     # Get model parameters (accounting for transforms)
-    input_shape = helpers.get_model_input_shape(cfg)
-    num_classes = helpers.get_num_classes(cfg.data)
+    input_shape = helpers.get_model_input_shape(cfg_validated)
+    num_classes = helpers.get_num_classes(cfg_validated.data)
     logger.info(f"Input shape: {input_shape}, Num classes: {num_classes}")
 
     # Create model
-    net = model.create_model(config=cfg, input_shape=input_shape, num_classes=num_classes)
-    logger.info(f"Model: {cfg.model.model_type} with input shape {input_shape}")
+    net = model.create_model(config=cfg_validated, input_shape=input_shape, num_classes=num_classes)
+    logger.info(f"Model: {cfg_validated.model.model_type} with input shape {input_shape}")
 
     # Wrap model in Lightning module
-    lit_model = LitModel(model=net, cfg=cfg, num_classes=num_classes)
+    lit_model = LitModel(model=net, cfg=cfg_validated, num_classes=num_classes)
 
     # Setup WandB logger
     wandb_logger = WandbLogger(
-        project=cfg.base.wandb.project,
-        entity=cfg.base.wandb.entity,
-        name=cfg.base.wandb.run_name if cfg.base.wandb.run_name else f"{cfg.base.job_id}_{cfg.model.model_type}",
-        tags=cfg.base.wandb.tags,
-        notes=cfg.base.wandb.notes,
-        offline=not cfg.base.wandb.online,
-        save_dir=cfg.train.model_path,
+        project=cfg_validated.base.wandb.project,
+        entity=cfg_validated.base.wandb.entity,
+        name=cfg_validated.base.wandb.run_name if cfg_validated.base.wandb.run_name else f"{cfg_validated.base.job_id}_{cfg_validated.model.model_type}",
+        tags=cfg_validated.base.wandb.tags,
+        notes=cfg_validated.base.wandb.notes,
+        offline=not cfg_validated.base.wandb.online,
+        save_dir=cfg_validated.train.model_path,
     )
 
     # Watch model parameters and gradients
     wandb_logger.watch(lit_model, log="all", log_freq=1000)
 
     # Log config to WandB
-    if not cfg.base.debug:
-        wandb_logger.experiment.config.update(cfg.model_dump(), allow_val_change=True)
+    if not cfg_validated.base.debug:
+        wandb_logger.experiment.config.update(cfg_validated.model_dump(), allow_val_change=True)
 
     # Setup callbacks
     callbacks = []
 
     # Model checkpointing
     checkpoint_callback = ModelCheckpoint(
-        dirpath=f"{cfg.train.model_path}/{cfg.base.job_id}",
+        dirpath=f"{cfg_validated.train.model_path}/{cfg_validated.base.job_id}",
         filename='{epoch:02d}-{val/acc:.4f}',
         monitor='val/acc',
         mode='max',
-        save_top_k=3 if cfg.train.save_model else 0,
+        save_top_k=3 if cfg_validated.train.save_model else 0,
         save_last=True,
         verbose=True,
     )
@@ -121,50 +105,49 @@ def main():
     callbacks.append(lr_monitor)
 
     # Early stopping (if enabled)
-    if cfg.train.early_stopping.enabled:
+    if cfg_validated.train.early_stopping.enabled:
         early_stop_callback = EarlyStopping(
-            monitor=cfg.train.early_stopping.monitor,
-            patience=cfg.train.early_stopping.patience,
-            mode=cfg.train.early_stopping.mode,
-            min_delta=cfg.train.early_stopping.min_delta,
+            monitor=cfg_validated.train.early_stopping.monitor,
+            patience=cfg_validated.train.early_stopping.patience,
+            mode=cfg_validated.train.early_stopping.mode,
+            min_delta=cfg_validated.train.early_stopping.min_delta,
             verbose=True,
         )
         callbacks.append(early_stop_callback)
-        logger.info(f"Early stopping enabled: monitor={cfg.train.early_stopping.monitor}, patience={cfg.train.early_stopping.patience}")
+        logger.info(f"Early stopping enabled: monitor={cfg_validated.train.early_stopping.monitor}, patience={cfg_validated.train.early_stopping.patience}")
 
     # Determine precision
     precision = "32"
-    if cfg.train.dtype == torch.float16:
+    if cfg_validated.train.dtype == torch.float16:
         precision = "16-mixed"
-    elif cfg.train.dtype == torch.bfloat16:
+    elif cfg_validated.train.dtype == torch.bfloat16:
         precision = "bf16-mixed"
     logger.info(f"Training precision: {precision}")
 
     # Create Lightning Trainer
     trainer = L.Trainer(
-        max_epochs=cfg.train.epochs,
-        accelerator="auto",  # Automatically selects GPU/CPU
-        devices="auto",  # Use all available devices
+        max_epochs=cfg_validated.train.epochs,
+        accelerator="auto",
+        devices="auto",
         precision=precision,
         logger=wandb_logger,
         callbacks=callbacks,
-        log_every_n_steps=cfg.train.lightning.log_every_n_steps,
-        enable_progress_bar=cfg.train.lightning.enable_progress_bar,
-        gradient_clip_val=cfg.train.lightning.gradient_clip_val,
-        accumulate_grad_batches=cfg.train.lightning.accumulate_grad_batches,
-        check_val_every_n_epoch=cfg.train.lightning.check_val_every_n_epoch,
-        num_sanity_val_steps=cfg.train.lightning.num_sanity_val_steps if not cfg.base.debug else 0,
-        fast_dev_run=cfg.base.debug,  # Run 1 batch of train/val/test for debugging
-        deterministic=True,  # For reproducibility
+        log_every_n_steps=cfg_validated.train.lightning.log_every_n_steps,
+        enable_progress_bar=cfg_validated.train.lightning.enable_progress_bar,
+        gradient_clip_val=cfg_validated.train.lightning.gradient_clip_val,
+        accumulate_grad_batches=cfg_validated.train.lightning.accumulate_grad_batches,
+        check_val_every_n_epoch=cfg_validated.train.lightning.check_val_every_n_epoch,
+        num_sanity_val_steps=cfg_validated.train.lightning.num_sanity_val_steps if not cfg_validated.base.debug else 0,
+        fast_dev_run=cfg_validated.base.debug,
+        deterministic=True,
     )
 
     # Train the model
-    logger.info(f"Starting training for {cfg.train.epochs} epochs...")
+    logger.info(f"Starting training for {cfg_validated.train.epochs} epochs...")
     trainer.fit(
         model=lit_model,
         train_dataloaders=train_dataloader,
         val_dataloaders=val_dataloader,
-        ckpt_path=args.resume if args.resume else None,
     )
 
     logger.info("Training completed!")
@@ -179,7 +162,7 @@ def main():
     logger.info("Testing completed!")
 
     # Log final metrics
-    if not cfg.base.debug:
+    if not cfg_validated.base.debug:
         if checkpoint_callback.best_model_path and checkpoint_callback.best_model_score:
             logger.info(f"Best model checkpoint: {checkpoint_callback.best_model_path}")
             logger.info(f"Best val/acc: {checkpoint_callback.best_model_score:.4f}")
@@ -192,6 +175,7 @@ def main():
             logger.info("No model checkpoints were saved.")
         # Finish WandB run
         wandb_logger.experiment.finish()
+
 
 if __name__ == "__main__":
     main()
