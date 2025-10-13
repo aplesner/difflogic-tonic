@@ -1,0 +1,33 @@
+# Example experiment configuration with checkpoint and gradient tracking enabled
+defaults:
+  - model: layered_feedforward
+  - dataloaders: mnist
+  - _self_
+
+# Experiment metadata
+experiment_name: mnist_with_checkpoints_and_gradients
+
+# Database and output paths
+db_path: ../results/experiments.db
+checkpoint_dir: ../results/checkpoints
+gradient_dir: ../results/gradients
+
+# Training configuration
+training:
+  batch_size: 128
+  epochs: 5
+  optimizer: adam
+  lr: 0.001
+  momentum: 0.9
+  weight_decay: 0.0
+  
+  # Metrics
+  metrics:
+    - accuracy
+    - perplexity
+  primary_metric: accuracy  # Determines best checkpoint
+  
+  # Histogram tracking (weight/gradient distributions over time)
+  save_gradients: true          # Enable histogram saving
+  gradient_num_samples: 100     # Number of validation samples
+  histogram_bins: 256           # Histogram resolution

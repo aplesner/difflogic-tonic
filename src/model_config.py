@@ -17,9 +17,20 @@ class DiffLogicConfig(BaseModel):
     grad_factor: float = 1.0
     tau: float = 10.0
 
+class DiffLUTConfig(BaseModel):
+    nodetypes: dict = {}
+    layertypes: dict = {}
+    n: int = 6
+    num_layers: int = 2
+    default_layer: str = "learnable"
+    default_node: str = "neurallut"
+    default_hidden_size: int = 2048
+    layer_overrides: dict = {}
+
 
 class ModelConfig(BaseModel):
     model_type: str = "MLP"
     mlp: MLPConfig = MLPConfig()
     cnn: CNNConfig = CNNConfig()
     difflogic: DiffLogicConfig = DiffLogicConfig()
+    difflut: DiffLUTConfig = DiffLUTConfig()

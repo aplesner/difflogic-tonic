@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 
 from .config import Config
-from .model_config import MLPConfig, CNNConfig, DiffLogicConfig
+from .model_config import MLPConfig, CNNConfig, DiffLogicConfig, DiffLUTConfig
+from .difflut_model import DiffLUTModel
 
 class DiffLogic(nn.Module):
     def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int, device: torch.device = torch.device('cpu')):
@@ -128,6 +129,9 @@ def create_model(config: Config, input_shape: tuple, num_classes: int) -> nn.Mod
     elif model_config.model_type == "DiffLogic":
         input_size = input_shape[0] * input_shape[1] * input_shape[2]
         model = DiffLogic(config=model_config.difflogic, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
+    elif model_config.model_type == "DiffLUT":
+        input_size = input_shape[0] * input_shape[1] * input_shape[2]
+        model = DiffLUTModel(config=model_config.difflut, input_size=input_size, num_classes=num_classes, device=torch.device(config.train.device))
     else:
         raise ValueError(f"Unknown model type: {model_config.model_type}")
 
