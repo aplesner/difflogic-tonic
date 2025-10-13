@@ -10,50 +10,45 @@ import torch.nn as nn
 from .config import Config
 from .model_config import MLPConfig, CNNConfig, DiffLogicConfig
 
-if DIFFLOGIC_AVAILABLE:
-    class DiffLogic(nn.Module):
-        def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int, device: torch.device = torch.device('cpu')):
-            super().__init__()
-            logic_layers = []
+class DiffLogic(nn.Module):
+    def __init__(self, config: DiffLogicConfig, input_size: int, num_classes: int, device: torch.device = torch.device('cpu')):
+        super().__init__()
+        if not DIFFLOGIC_AVAILABLE:
+            raise ImportError("Difflogic package is not installed. Please install it via 'pip install difflogic'.")
+        
+        logic_layers = []
 
-            ####################################################################################################################
+        ####################################################################################################################
 
-            logic_layers.append(torch.nn.Flatten())
+        logic_layers.append(torch.nn.Flatten())
+        logic_layers.append(
+            LogicLayer( # pyright: ignore[reportPossiblyUnboundVariable]
+                in_dim=input_size, 
+                out_dim=config.num_neurons, 
+                connections='random', 
+                grad_factor=config.grad_factor, 
+                device=device.type
+            )
+        )
+        for _ in range(config.num_layers - 1):
             logic_layers.append(
-                LogicLayer(
-                    in_dim=input_size, 
+                LogicLayer( # pyright: ignore[reportPossiblyUnboundVariable]
+                    in_dim=config.num_neurons, 
                     out_dim=config.num_neurons, 
-                    connections='random', 
+                    connections=config.connections,
                     grad_factor=config.grad_factor, 
                     device=device.type
                 )
             )
-            for _ in range(config.num_layers - 1):
-                logic_layers.append(
-                    LogicLayer(
-                        in_dim=config.num_neurons, 
-                        out_dim=config.num_neurons, 
-                        connections=config.connections,
-                        grad_factor=config.grad_factor, 
-                        device=device.type
-                    )
-                )
 
-            self.network = torch.nn.Sequential(
-                *logic_layers,
-                GroupSum(num_classes, config.tau)
-            )
+        self.network = torch.nn.Sequential(
+            *logic_layers,
+            GroupSum(num_classes, config.tau) # pyright: ignore[reportPossiblyUnboundVariable]
+        )
 
-        def forward(self, x: torch.Tensor):
-            x = self.network(x)
-            return x
-else:
-    class DiffLogic(nn.Module):
-        def __init__(self, *args, **kwargs):
-            raise ImportError("Difflogic package is not installed. Please install it via 'pip install difflogic'.")
-
-        def forward(self, x: torch.Tensor):
-            pass
+    def forward(self, x: torch.Tensor):
+        x = self.network(x)
+        return x
 
 class MLP(nn.Module):
     """Simple Multi-Layer Perceptron"""

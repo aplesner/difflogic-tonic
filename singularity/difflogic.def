@@ -105,4 +105,4 @@ Stage: final
     echo "Usage: singularity exec --nv --bind <host_path>:<container_path> <image.sif> python script.py"
     
     echo "Starting Jupyter Lab..."
-    jupyter notebook --no-browser --port 5998 --ip $(hostname -f)
+    python3 -m notebook --no-browser --port 5998 --ip $(hostname -f)
