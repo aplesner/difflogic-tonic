@@ -4,10 +4,11 @@
 # - NVIDIA A100 (8.0), A6000 (8.6)
 # - RTX 3090 (8.6), Titan RTX (7.5), Titan XP (6.1)
 # - V100 (7.0), RTX 2080 Ti (7.5)
-# Base Image: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
+# Base Image: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
 ###############################################################################
 Bootstrap: docker
 From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
+Stage: build
 
 %setup
     # Copy entire difflut package (including nested structure and setup.py)
@@ -31,8 +32,7 @@ From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
     # We omit the 3090s, A100s and A6000s for faster compile times
     # If you want to include them, uncomment the line below
     # export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5"
-    export TORCH_CUDA_ARCH_LIST="6.1"
-    # export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6"
+    export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6"
     export CUDA_HOME=/usr/local/cuda
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
 
@@ -64,16 +64,15 @@ From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
         ipykernel \
         pydantic \
         difflogic
+        
+    # Verify the hydra installation
+    python3 -c "import hydra; print('Hydra version:', hydra.__version__)"
 
     ##################################################
     # Install DiffLUT with CUDA Extensions
     ##################################################
     echo "=============================================="
     echo "Building DiffLUT with CUDA extensions..."
-    echo "This compiles 3 CUDA extensions for 3 GPU architectures"
-    echo "Architectures: 6.1 (Titan XP), 7.0 (V100), 7.5 (Titan RTX)"
-    echo "Using ccache for faster compilation..."
-    echo "This may take 3-5 minutes (first build)..."
     echo "=============================================="
 
     cd /opt/difflut
@@ -103,6 +102,61 @@ From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
     echo "ccache stats:"
     ccache -s
     echo "=============================================="
+     
+    ##################################################
+    # Prepare artifacts
+    ##################################################
+    mkdir -p /opt/artifacts/lib/python3.11/site-packages
+    cp -r /opt/conda/lib/python3.11/site-packages/* /opt/artifacts/lib/python3.11/site-packages/
+
+   echo "=============================================="
+
+%environment
+    ##################################################
+    # Environment Configuration
+    ##################################################
+    export LC_ALL=C.UTF-8
+    export PATH=/opt/conda/bin:$PATH
+    export CUDA_HOME=/usr/local/cuda
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+
+
+###############################################################################
+# Final Runtime Image
+###############################################################################
+
+Bootstrap: docker
+From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+Stage: final
+
+%files from build
+    /opt/artifacts /opt/artifacts
+
+%post
+    ##################################################
+    # Install Python packages from build stage
+    ##################################################
+    cp -r /opt/artifacts/lib/python3.11/site-packages/* /opt/conda/lib/python3.11/site-packages/
+
+    ##################################################
+    # Cleanup and permissions
+    ##################################################
+    rm -rf /opt/artifacts
+    chmod -R a+r /opt/conda/lib/python3.11/site-packages
+    # Update shared library cache
+    
+    # Verify DiffLUT installation
+    echo "=============================================="
+    echo "DiffLUT installation complete"
+    echo "DEBUG: Installed package location:"
+    python3 -c "import difflut; print('Module location:', difflut.__file__)"
+    echo "DEBUG: Contents of installed __init__.py:"
+    python3 -c "import difflut; import os; print(open(difflut.__file__).read()[:500])"
+    echo "Testing import:"
+    python3 -c "import difflut; print('Version:', difflut.__version__); from difflut.nodes import LinearLUTNode; print('Import successful')"
+    echo "=============================================="
+    ldconfig  
+
 
 %environment
     ##################################################
@@ -119,16 +173,10 @@ From: pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
     ##################################################
     echo "===================================================================="
     echo "PyTorch Universal Container"
-    echo "Supported CUDA Architectures: 6.1, 7.0, 7.5"
+    echo "Supported CUDA Architectures: 6.1, 7.0, 7.5, 8.0, 8.6"
     echo "--------------------------------------------------------------------"
     echo "Python version: $(python --version)"
-    echo "PyTorch version: $(python -c 'import torch; print(torch.__version__)')"
-    echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
-    echo "CUDA version: $(python -c 'import torch; print(torch.version.cuda)')"
-    echo "DiffLUT version: $(python -c 'import difflut; print(difflut.__version__)')"
-    if [ "$(python -c 'import torch; print(torch.cuda.is_available())')" = "True" ]; then
-        echo "GPU detected: $(python -c 'import torch; print(torch.cuda.get_device_name(0))')"
-    fi
+    echo "$(python -c 'import torch; print(f"PyTorch version: {torch.__version__}", "CUDA available: {torch.cuda.is_available()}", "CUDA version: {torch.version.cuda}", "GPU detected: {torch.cuda.get_device_name(0)}", sep="\n")')"
     echo "===================================================================="
     echo "Usage: singularity exec --nv --bind <host_path>:<container_path> <image.sif> python script.py"
 
