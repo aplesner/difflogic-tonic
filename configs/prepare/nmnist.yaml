@@ -1,9 +1,0 @@
-# @package _global_
-
-data:
-  name: NMNIST
-  events_per_frame: 1500
-  overlap: 0.66
-  denoise_time: 1200
-  num_threads: 12
-  val_split: 0.05

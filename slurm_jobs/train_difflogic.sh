@@ -28,17 +28,15 @@ SALT_PEPPER_NOISE=0.1
 RANDOM_CROP=4
 DOWNSAMPLE_FACTOR=2
 
-# Config file
-CONFIG_FILE="configs/cifar10dvs_difflogic.yaml"
-
-# Job ID based on neuron count
+# Job ID based on job number
 JOB_ID="difflogic_${SLURM_JOB_ID}"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Job ID: $SLURM_JOB_ID"
-echo "Config: $CONFIG_FILE"
-echo "Neuron Count: $NEURON_COUNT"
+echo "Experiment: cifar10dvs_difflogic"
+echo "Neuron Count: $NUM_NEURONS"
+echo "Tau: $TAU"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Memory: $SLURM_MEM_PER_NODE MB"
 echo "GPU: $CUDA_VISIBLE_DEVICES"
@@ -48,12 +46,6 @@ echo ""
 
 # Go to code directory
 cd ~/code/difflogic-tonic || { echo "Error: Could not change to code directory"; exit 1; }
-
-# Check if config file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Config file '$CONFIG_FILE' not found"
-    exit 1
-fi
 
 # Define storage directories
 source helper_scripts/project_variables.sh
@@ -72,17 +64,8 @@ crop${RANDOM_CROP}\
 _downsample${DOWNSAMPLE_FACTOR}"
 echo "WandB Run Name: $WANDB_RUN_NAME"
 
-
-OVERRIDES="\
---override model.difflogic.num_neurons=${NUM_NEURONS} \
---override model.difflogic.tau=${TAU} \
---override base.wandb.run_name=${WANDB_RUN_NAME} \
---override data.downsample_factor=${DOWNSAMPLE_FACTOR} \
---override data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} \
---override data.augmentation.random_crop_padding=${RANDOM_CROP}"
-
-# Run train.sh with the selected config and overrides. The overrides should be enclosed in quotes.
-./train.sh "$CONFIG_FILE" "$JOB_ID" "${OVERRIDES}"
+# Run train.sh with experiment config and overrides
+./train.sh experiment=cifar10dvs_difflogic base.job_id=$JOB_ID model.difflogic.num_neurons=${NUM_NEURONS} model.difflogic.tau=${TAU} base.wandb.run_name=${WANDB_RUN_NAME} data.downsample_pool_size=${DOWNSAMPLE_FACTOR} data.augmentation.salt_pepper_noise=${SALT_PEPPER_NOISE} data.augmentation.random_crop_padding=${RANDOM_CROP}
 
 # Check return status
 if [ $? -eq 0 ]; then

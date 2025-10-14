@@ -41,17 +41,15 @@ DOWNSAMPLE_FACTOR="${DOWNSAMPLE_FACTORS[$((INDEX / 4))]}"
 echo "Selected Neuron Count: $NEURON_COUNT"
 echo "Selected Downsample Factor: $DOWNSAMPLE_FACTOR"
 
-# Config file
-CONFIG_FILE="configs/cifar10dvs_difflogic.yaml"
-
 # Job ID based on neuron count
 JOB_ID="neurons_${NEURON_COUNT}_downsample_${DOWNSAMPLE_FACTOR}_run"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Job ID: $SLURM_JOB_ID"
-echo "Config: $CONFIG_FILE"
+echo "Experiment: cifar10dvs_difflogic"
 echo "Neuron Count: $NEURON_COUNT"
+echo "Downsample Factor: $DOWNSAMPLE_FACTOR"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Memory: $SLURM_MEM_PER_NODE MB"
 echo "GPU: $CUDA_VISIBLE_DEVICES"
@@ -62,12 +60,6 @@ echo ""
 # Go to code directory
 cd ~/code/difflogic-tonic || { echo "Error: Could not change to code directory"; exit 1; }
 
-# Check if config file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Config file '$CONFIG_FILE' not found"
-    exit 1
-fi
-
 # Define storage directories
 source helper_scripts/project_variables.sh
 
@@ -76,8 +68,8 @@ echo "  SCRATCH_STORAGE_DIR: $SCRATCH_STORAGE_DIR"
 echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
-# Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.difflogic.num_neurons=$NEURON_COUNT --override data.downsample_pool_size=$DOWNSAMPLE_FACTOR --override base.wandb.run_name="c10_dlgn_${NEURON_COUNT}neurons_${DOWNSAMPLE_FACTOR}downsample"
+# Run train.sh with experiment config and overrides
+./train.sh experiment=cifar10dvs_difflogic base.job_id=$JOB_ID model.difflogic.num_neurons=$NEURON_COUNT data.downsample_pool_size=$DOWNSAMPLE_FACTOR base.wandb.run_name="c10_dlgn_${NEURON_COUNT}neurons_${DOWNSAMPLE_FACTOR}downsample"
 
 # Check return status
 if [ $? -eq 0 ]; then

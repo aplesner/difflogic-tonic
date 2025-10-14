@@ -3,6 +3,7 @@
 defaults:
   - dataset: nmnist
   - model: difflogic
+  - optional experiment: null
   - _self_
 
 base:

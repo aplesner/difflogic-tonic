@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - override /dataset: cifar10dvs
+  - override /model: mlp
+
+base:
+  job_id: "cifar10dvs_mlp"
+  wandb:
+    online: true
+
+train:
+  epochs: 30
+  learning_rate: 1e-3

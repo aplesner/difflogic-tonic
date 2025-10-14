@@ -27,16 +27,13 @@ NEURON_COUNTS=(
 # Select neuron count based on array task ID (1-indexed)
 NEURON_COUNT="${NEURON_COUNTS[$((SLURM_ARRAY_TASK_ID - 1))]}"
 
-# Config file
-CONFIG_FILE="configs/cifar10dvs_mlp.yaml"
-
 # Job ID based on neuron count
 JOB_ID="neurons_${NEURON_COUNT}"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Job ID: $SLURM_JOB_ID"
-echo "Config: $CONFIG_FILE"
+echo "Experiment: cifar10dvs_mlp"
 echo "Neuron Count: $NEURON_COUNT"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Memory: $SLURM_MEM_PER_NODE MB"
@@ -48,12 +45,6 @@ echo ""
 # Go to code directory
 cd ~/code/difflogic-tonic || { echo "Error: Could not change to code directory"; exit 1; }
 
-# Check if config file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Config file '$CONFIG_FILE' not found"
-    exit 1
-fi
-
 # Define storage directories
 source helper_scripts/project_variables.sh
 
@@ -62,8 +53,8 @@ echo "  SCRATCH_STORAGE_DIR: $SCRATCH_STORAGE_DIR"
 echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
-# Run train.sh with the selected config and override neuron count
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override model.mlp.hidden_size=$NEURON_COUNT --override base.wandb.run_name="cifar10dvs_mlp_${NEURON_COUNT}neurons"
+# Run train.sh with experiment config and overrides
+./train.sh experiment=cifar10dvs_mlp base.job_id=$JOB_ID model.mlp.hidden_size=$NEURON_COUNT base.wandb.run_name="cifar10dvs_mlp_${NEURON_COUNT}neurons"
 
 # Check return status
 if [ $? -eq 0 ]; then

@@ -32,17 +32,15 @@ SALT_AND_PEPPER_LEVEL=${VALUES_TO_USE[1]}
 echo "Selected Random Crop Size: $RANDOM_CROP_SIZE"
 echo "Selected Salt and Pepper Level: $SALT_AND_PEPPER_LEVEL"
 
-# Config file
-CONFIG_FILE="configs/cifar10dvs_difflogic.yaml"
-
 # Job ID based on random crop size and salt and pepper level
 JOB_ID="random_crop_${RANDOM_CROP_SIZE}_salt_pepper_${SALT_AND_PEPPER_LEVEL}_run"
 
 echo "========================================"
 echo "SLURM Job Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Job ID: $SLURM_JOB_ID"
-echo "Config: $CONFIG_FILE"
-echo "Neuron Count: $NEURON_COUNT"
+echo "Experiment: cifar10dvs_difflogic"
+echo "Random Crop Size: $RANDOM_CROP_SIZE"
+echo "Salt and Pepper Level: $SALT_AND_PEPPER_LEVEL"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Memory: $SLURM_MEM_PER_NODE MB"
 echo "GPU: $CUDA_VISIBLE_DEVICES"
@@ -53,12 +51,6 @@ echo ""
 # Go to code directory
 cd ~/code/difflogic-tonic || { echo "Error: Could not change to code directory"; exit 1; }
 
-# Check if config file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Config file '$CONFIG_FILE' not found"
-    exit 1
-fi
-
 # Define storage directories
 source helper_scripts/project_variables.sh
 
@@ -67,8 +59,8 @@ echo "  SCRATCH_STORAGE_DIR: $SCRATCH_STORAGE_DIR"
 echo "  PROJECT_STORAGE_DIR: $PROJECT_STORAGE_DIR"
 echo ""
 
-# Run train.sh with the selected config and override random crop size and salt and pepper level
-./train.sh "$CONFIG_FILE" "$JOB_ID" --override data.augmentation.random_crop_padding=$RANDOM_CROP_SIZE --override data.augmentation.salt_pepper_noise=$SALT_AND_PEPPER_LEVEL --override base.wandb.run_name="c10_dlgn_${RANDOM_CROP_SIZE}crop_${SALT_AND_PEPPER_LEVEL}saltpepper"
+# Run train.sh with experiment config and overrides
+./train.sh experiment=cifar10dvs_difflogic base.job_id=$JOB_ID data.augmentation.random_crop_padding=$RANDOM_CROP_SIZE data.augmentation.salt_pepper_noise=$SALT_AND_PEPPER_LEVEL base.wandb.run_name="c10_dlgn_${RANDOM_CROP_SIZE}crop_${SALT_AND_PEPPER_LEVEL}saltpepper"
 
 # Check return status
 if [ $? -eq 0 ]; then
