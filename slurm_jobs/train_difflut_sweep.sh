@@ -78,7 +78,7 @@ echo ""
     model.difflut.num_layers=$LAYERS \
     model.difflut.default_hidden_size=$HIDDEN \
     model.difflut.default_node=$NODE \
-    base.num_epochs=5 \
+    train.epochs=5 \
     base.wandb.run_name="${JOB_ID}"
 
 # Check return status
