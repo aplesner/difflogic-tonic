@@ -1,4 +1,5 @@
-export USERNAME=$(whoami)
+# export USERNAME=$(whoami)
+export USERNAME=aplesner
 export PROJECT_NAME="difflogic-tonic"
 export PROJECT_STORAGE_DIR="/itet-stor/${USERNAME}/net_scratch/projects_storage/${PROJECT_NAME}"
 export SCRATCH_STORAGE_DIR="/scratch/${USERNAME}/${PROJECT_NAME}"

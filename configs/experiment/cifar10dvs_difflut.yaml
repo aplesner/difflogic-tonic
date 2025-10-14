@@ -4,5 +4,9 @@ defaults:
   - override /dataset: cifar10dvs
   - override /model: difflut
 
+model:
+  difflut:
+    default_hidden_size: 256
+
 base:
   job_id: "cifar10dvs_difflut"

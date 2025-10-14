@@ -18,11 +18,11 @@ model:
         layer_type: learnable
         tau: 0.1
 
-    n: 6
+    n: 2
     num_layers: 2
     default_layer: learnable
     default_node: neurallut
-    default_hidden_size: 2048
+    default_hidden_size: 1024
     layer_overrides: {}
 
 base:
