@@ -8,7 +8,7 @@ model:
         node_type: linear_lut
       neurallut:
         node_type: neurallut
-        hidden_width: 16
+        hidden_width: 8
         depth: 2
         skip_interval: 2
         activation: leakyrelu
@@ -16,7 +16,9 @@ model:
     layertypes:
       learnable:
         layer_type: learnable
-        tau: 0.1
+        tau: 0.5
+      random:
+        layter_type: random
 
     n: 6
     num_layers: 2
