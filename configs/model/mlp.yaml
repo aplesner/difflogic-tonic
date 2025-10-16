@@ -2,6 +2,7 @@
 
 model:
   model_type: MLP
+  tags: ["mlp"]
   mlp:
     hidden_size: 512
     num_hidden_layers: 1
@@ -11,7 +12,3 @@ train:
   dataloader:
     num_workers: 6
     prefetch_factor: 5
-
-base:
-  wandb:
-    tags: ["mlp"]

@@ -2,10 +2,7 @@
 
 model:
   model_type: CNN
+  tags: ["cnn"]
   cnn:
     num_conv_layers: 3
     base_channels: 32
-
-base:
-  wandb:
-    tags: ["cnn"]

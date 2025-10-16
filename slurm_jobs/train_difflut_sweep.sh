@@ -79,7 +79,8 @@ echo ""
     model.difflut.default_hidden_size=$HIDDEN \
     model.difflut.default_node=$NODE \
     train.epochs=5 \
-    base.wandb.run_name="${JOB_ID}"
+    base.wandb.run_name="${JOB_ID}" \
+    '+base.wandb.tags=[sweep]'
 
 # Check return status
 if [ $? -eq 0 ]; then

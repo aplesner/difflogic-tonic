@@ -15,8 +15,14 @@ base:
     project: "difflogic-tonic"
     entity: null
     run_name: null
-    tags: []
+    tags: ${merge_lists:${model.tags},${dataset.tags}}
     notes: null
+
+model:
+  tags: []
+
+dataset:
+  tags: []
 
 data:
   name: ???

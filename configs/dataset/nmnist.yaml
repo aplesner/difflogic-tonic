@@ -1,8 +1,7 @@
 # @package _global_
 
+dataset:
+  tags: ["nmnist"]
+
 data:
   name: NMNIST
-
-base:
-  wandb:
-    tags: ["nmnist"]

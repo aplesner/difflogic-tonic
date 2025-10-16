@@ -2,6 +2,7 @@
 
 model:
   model_type: DiffLUT
+  tags: ["difflut"]
   difflut:
     nodetypes:
       linearlut:
@@ -26,7 +27,3 @@ model:
     default_node: neurallut
     default_hidden_size: 1024
     layer_overrides: {}
-
-base:
-  wandb:
-    tags: ["difflut"]

@@ -1,9 +1,8 @@
 # @package _global_
 
+dataset:
+  tags: ["cifar10dvs"]
+
 data:
   name: CIFAR10DVS
   downsample_pool_size: 2
-
-base:
-  wandb:
-    tags: ["cifar10dvs"]

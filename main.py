@@ -3,6 +3,9 @@ from typing import Any
 from omegaconf import DictConfig, OmegaConf
 import hydra
 
+# Register custom resolver to merge lists from multiple configs
+OmegaConf.register_new_resolver("merge_lists", lambda *lists: [item for lst in lists if lst for item in lst])
+
 # setup logging
 logging.basicConfig(
     level=logging.INFO,

@@ -104,7 +104,7 @@ class DiffLUTModel(nn.Module):
             raise ValueError(f"Last hidden size {prev_size} must be divisible by output size {output_size}")
         
 
-        tau = hidden_size // output_size
+        tau = hidden_size // output_size # pyright: ignore[reportPossiblyUnboundVariable]
         self.output_layer = GroupSum(k=output_size, tau=tau)
         print(f"  Output layer: {prev_size} → {output_size} (via GroupSum)")
     
@@ -125,7 +125,7 @@ class DiffLUTModel(nn.Module):
         reg = 0.0
         for layer in self.layers:
             if hasattr(layer, 'regularization'):
-                layer_reg = layer.regularization()
+                layer_reg = layer.regularization() # pyright: ignore[reportCallIssue]
                 # Only add if it has gradients or is non-zero
                 if isinstance(layer_reg, torch.Tensor):
                     reg = reg + layer_reg
