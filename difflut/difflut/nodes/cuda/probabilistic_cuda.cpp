@@ -2,16 +2,18 @@
 
 #include <vector>
 
-torch::Tensor efd_cuda_forward(
-  torch::Tensor input,
-  torch::Tensor mapping,
-  torch::Tensor luts
-);
-
-std::vector<torch::Tensor> efd_cuda_backward(
+torch::Tensor probabilistic_cuda_forward(
   torch::Tensor input,
   torch::Tensor mapping,
   torch::Tensor luts,
+  torch::Tensor temperature
+);
+
+std::vector<torch::Tensor> probabilistic_cuda_backward(
+  torch::Tensor input,
+  torch::Tensor mapping,
+  torch::Tensor luts,
+  torch::Tensor temperature,
   torch::Tensor output_grad
 );
 
@@ -19,29 +21,31 @@ std::vector<torch::Tensor> efd_cuda_backward(
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-torch::Tensor efd_forward(
-  torch::Tensor input,
-  torch::Tensor mapping,
-  torch::Tensor luts) {
-    CHECK_INPUT(input);
-    CHECK_INPUT(mapping);
-    CHECK_INPUT(luts);
-    return efd_cuda_forward(input, mapping, luts);
-};
-
-std::vector<torch::Tensor> efd_backward(
+torch::Tensor probabilistic_forward(
   torch::Tensor input,
   torch::Tensor mapping,
   torch::Tensor luts,
+  torch::Tensor temperature) {
+    CHECK_INPUT(input);
+    CHECK_INPUT(mapping);
+    CHECK_INPUT(luts);
+    return probabilistic_cuda_forward(input, mapping, luts, temperature);
+};
+
+std::vector<torch::Tensor> probabilistic_backward(
+  torch::Tensor input,
+  torch::Tensor mapping,
+  torch::Tensor luts,
+  torch::Tensor temperature,
   torch::Tensor output_grad) {
     CHECK_INPUT(input);
     CHECK_INPUT(mapping);
     CHECK_INPUT(luts);
     CHECK_INPUT(output_grad);
-    return efd_cuda_backward(input, mapping, luts, output_grad);
+    return probabilistic_cuda_backward(input, mapping, luts, temperature, output_grad);
 };
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &efd_forward, "EFD CUDA forward");
-  m.def("backward", &efd_backward, "EFD CUDA backward");
+  m.def("forward", &probabilistic_forward, "Probabilistic CUDA forward");
+  m.def("backward", &probabilistic_backward, "Probabilistic CUDA backward");
 }

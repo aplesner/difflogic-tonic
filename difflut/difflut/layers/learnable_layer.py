@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Type, Dict, Any, Optional
+import warnings
 from .base_layer import BaseLUTLayer
 from ..registry import register_layer
 
@@ -56,7 +57,10 @@ class LearnableLayer(BaseLUTLayer):
                  node_type: Type[nn.Module],
                  n: int = 6,
                  node_kwargs: Optional[Dict[str, Any]] = None,
-                 tau: float = 0.001):
+                 tau: float = 0.001,
+                 tau_start: float = 1.0,
+                 tau_min: float = 0.0001,
+                 tau_decay_iters: float = 1000.0):
         """
         Args:
             input_size: Size of input vector
@@ -64,15 +68,41 @@ class LearnableLayer(BaseLUTLayer):
             node_type: LUT node class
             n: Number of inputs per LUT
             node_kwargs: Additional arguments for nodes
-            tau: Temperature for softmax in learnable mapping
+            tau: Initial temperature for softmax in learnable mapping
+            tau_start: Starting value for tau (used for exponential decay)
+            tau_min: Minimum value tau can decay to
+            tau_decay_iters: Number of iterations for tau to decay by factor of 10
         """
+        # Warn about parameter count
+        total_connections = output_size * n
+        if total_connections > input_size * 10:
+            warnings.warn(
+                f"LearnableLayer: Creating {total_connections} learnable connections from {input_size} inputs. "
+                f"This may lead to overfitting. Consider using GroupedLayer or fewer nodes/inputs per node (n={n}).",
+                UserWarning,
+                stacklevel=2
+            )
+        
+        # Warn if tau parameters seem unusual
+        if tau_start < tau_min:
+            warnings.warn(
+                f"LearnableLayer: tau_start ({tau_start}) is less than tau_min ({tau_min}). "
+                f"This means tau will be clamped immediately. Set tau_start >= tau_min.",
+                UserWarning,
+                stacklevel=2
+            )
+        
         # Initialize parent with nodes
         super().__init__(input_size, output_size, node_type, n, node_kwargs)
         
-        self.tau = tau
+        # Tau decay parameters
+        self.tau_start = tau_start
+        self.tau_min = tau_min
+        self.tau_decay_iters = tau_decay_iters
+        self.tau = tau_start  # Start with tau_start instead of tau
         
         # Create learnable mapping module (helper, not registered)
-        self.mapping = LearnableMappingModule(input_size, output_size * n, tau)
+        self.mapping = LearnableMappingModule(input_size, output_size * n, self.tau)
     
     def get_mapping(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -99,6 +129,21 @@ class LearnableLayer(BaseLUTLayer):
             hard_indices = torch.argmax(self.mapping.W, dim=-1)
             return hard_indices.view(self.output_size, self.n)
     
+    def update_tau(self, iteration: int):
+        """
+        Update tau using exponential decay.
+        
+        Args:
+            iteration: Current training iteration
+        """
+        # Calculate decay factor: tau = tau_start * 10^(-iteration / tau_decay_iters)
+        # This means tau decays by a factor of 10 every tau_decay_iters iterations
+        decay_factor = 10.0 ** (-iteration / self.tau_decay_iters)
+        self.tau = max(self.tau_start * decay_factor, self.tau_min)
+        
+        # Update the mapping module's tau
+        self.mapping.tau = self.tau
+
     def extra_repr(self) -> str:
         """String representation for print(model)."""
         return f"input_size={self.input_size}, output_size={self.output_size}, " \

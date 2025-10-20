@@ -1,353 +1,398 @@
-# DiffLUT - Differentiable Look-Up Table Networks
 
-A PyTorch library for LUT-based neural networks with custom forward/backward passes and gradient calculations. This research project enables efficient FPGA deployment through automatic SystemVerilog generation.
+# DiffLUT Library
+![Python](https://img.shields.io/badge/python-3.7%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+[![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)]()
 
-## Features
+DiffLUT is a modular PyTorch library for differentiable Look-Up Table (LUT) neural networks, designed for efficient FPGA deployment and research. It provides encoders, LUT nodes, flexible layers, and CUDA acceleration.
 
-- **Modular LUT Nodes**: Customizable forward passes (training/inference) and gradient calculations
-- **Flexible Layers**: Build networks using different LUT node types
-- **CUDA Acceleration**: Optimized kernels for training speed
-- **FPGA Deployment**: Automatic translation to SystemVerilog for FPGA implementation
-- **Research Ready**: Clean separation between core library and experiments
+## Overview
 
-## Project Structure
-```
-.
-├── LICENSE
-├── README.md
-├── pyproject.toml
-├── setup.py
-├── build/                      # Build artifacts
-├── containers/                 # Singularity containers for experiments
-│   ├── pytorch_universal_minimal.def
-│   └── pytorch_universal_minimal.sif
-├── data/                       # Training datasets (MNIST, etc.)
-├── difflut/                    # Main library
-│   ├── __init__.py
-│   ├── registry.py             # Component registration system
-│   ├── encoder/                # Input encoding modules
-│   │   ├── __init__.py
-│   │   ├── base_encoder.py
-│   │   └── thermometer.py
-│   ├── layers/                 # LUT layer implementations
-│   │   ├── __init__.py
-│   │   ├── base_layer.py
-│   │   ├── random_layer.py
-│   │   ├── cyclic_layer.py
-│   │   └── learnable_layer.py
-│   ├── nodes/                  # LUT node implementations
-│   │   ├── __init__.py
-│   │   ├── base_node.py
-│   │   ├── dwn_node.py
-│   │   ├── linear_lut_node.py
-│   │   ├── neurallut_node.py
-│   │   ├── polylut_node.py
-│   │   ├── probabilistic_node.py
-│   │   └── cuda/               # CUDA acceleration kernels
-│   │       ├── __init__.py
-│   │       ├── efd_cuda.cpp
-│   │       └── efd_cuda_kernel.cu
-│   └── utils/                  # Utility functions
-│       ├── __init__.py
-│       ├── fpga_export.py
-│       ├── modules.py
-│       └── regularizers.py
-├── docs/                       # Documentation
-├── examples/                   # Tutorial notebooks and examples
-│   └── mnist_difflut_tutorial.ipynb
-├── experiments/                # Modular experiment pipeline (Hydra + DB)
-│   ├── run_experiment.py       # Main entry point (Hydra composed config)
-│   ├── trainer.py              # Training loop + checkpointing + DB logging
-│   ├── query_results.py        # CLI helper to inspect results in DB
-│   ├── configs/                # Hydra configuration tree
-│   │   ├── experiment1.yaml    # Base experiment (composes model + dataloader)
-│   │   ├── dataloaders/        # Dataset configs (mnist, fashionmnist, cifar10)
-│   │   └── model/              # Model configs (e.g. layered_feedforward)
-│   ├── dataloaders/            # Dataset loader implementations (encoded)
-│   ├── models/                 # Experiment model definitions (DiffLUT wrappers)
-│   ├── utils/db_manager.py     # SQLAlchemy SQLite manager (experiments.db)
-│   ├── PIPELINE_README.md      # Extended pipeline documentation
-│   └── requirements.txt        # Optional extra deps (hydra-core, sqlalchemy)
-├── logs/                       # Experiment logs
-├── scripts/                    # Helper scripts
-│   ├── run_experiment.sh       # Single job (Singularity + SLURM)
-│   ├── sweep_node_types.sh     # Array job over node types
-│   ├── sweep_layer_types.sh    # Array job over layer types
-│   ├── sweep_datasets.sh       # Array job over datasets
-│   ├── sweep_hyperparams.sh    # Grid search (lr × hidden size)
-│   └── README.md               # SLURM usage & examples
-└── tests/                      # Unit tests
-```
+
+**Features:**
+- Modular LUT nodes and layers
+- Multiple input encoders
+- CUDA acceleration (optional)
+- FPGA export tools
+
 
 ## Installation
 
 ```bash
-git clone https://gitlab.ethz.ch/disco-students/hs25/difflut
-cd difflut
 pip install -e .
 ```
+Requires Python 3.7+, PyTorch 1.9+, and (optionally) CUDA for GPU support.
 
-## Quick Start
+
+CUDA kernels (Fourier, Hybrid, GradientStabilized nodes) are compiled automatically if CUDA is available. Otherwise, CPU fallback is used.
+
+
+
+## Usage Overview
+
+
+### Encoders
+
+Encoders transform continuous input values into discrete representations suitable for LUT indexing.
+
 ```python
-import torch
-from difflut.nodes import LinearLUTNode
-from difflut.layers import RandomLayer
 from difflut.encoder import ThermometerEncoder
+import torch
 
-# Create an encoder for input quantization
+# Create a 4-bit thermometer encoder
 encoder = ThermometerEncoder(num_bits=4)
 
-# Build a layer with LUT nodes
-layer = RandomLayer(
-    input_size=28*28,  # MNIST image size
-    output_size=10,    # Number of classes
-    node_type='LinearLUTNode',
-    node_config={'k': 4}  # 4-input LUTs
-)
+# Fit encoder to data (computes min/max values)
+train_data = torch.randn(1000, 784)  # Training data
+encoder.fit(train_data)
 
-# Use like a regular PyTorch module
-x = torch.randn(32, 28*28)
-output = layer(x)
-loss = output.mean()
-loss.backward()
+# Now encode inputs
+x = torch.randn(32, 784)  # Batch of MNIST images
+encoded = encoder(x)       # Shape: (32, 784 * 4)
 ```
 
-## Usage
 
-The library supports three main abstractions:
-1. **Encoders**: Transform continuous inputs into discrete representations suitable for LUTs
-2. **Nodes**: Define LUT behavior, weight parametrization, and gradient calculations
-3. **Layers**: Define how nodes are connected to form complete neural layers
+Encoders transform continuous inputs for LUT indexing. Types: Thermometer, Gaussian, Gray, OneHot, Binary, Logarithmic, etc.
 
-### Available Components
 
-#### Nodes
-- `LinearLUTNode`: Linear interpolation-based LUT
-- `DWNNode`: Deep Weight Networks node
-- `PolyLUTNode`: Polynomial-based LUT approximation
-- `NeuralLUTNode`: Neural network-based LUT learning
-- `ProbabilisticNode`: Probabilistic LUT with uncertainty
+### Nodes
 
-#### Layers
-- `BaseLUTLayer`: Base layer for LUT-based networks
-- `RandomLayer`: Random input-to-node mapping
-- `CyclicMappingLayer`: Cyclic pattern mapping
-- `LearnableMappingLayer`: Learnable input connections
+Nodes define the behavior of individual LUTs, including:
+- Forward pass computation (training vs. inference)
+- Gradient calculation strategies
+- Weight parametrization
+- Hardware export formats
 
-#### Encoders
-- `ThermometerEncoder`: Standard thermometer encoding
-- `GaussianThermometerEncoder`: Gaussian-weighted encoding
-- `DistributiveThermometerEncoder`: Distribution-aware encoding
+```python
+from difflut.nodes import LinearLUTNode
 
-### Custom Nodes
+# Create a LUT node with 4 inputs
+node = LinearLUTNode(input_dim=[4], output_dim=[1])
+
+# Use in forward pass
+inputs = torch.randint(0, 2, (32, 4))  # Binary inputs
+output = node(inputs)  # Shape: (32,)
+```
+
+
+LUT nodes define computation and gradients. Types: LinearLUTNode, PolyLUTNode, NeuralLUTNode, DWNNode, ProbabilisticNode, FourierNode, HybridNode, GradientStabilizedNode.
+
+
+### Layers
+
+Layers define how input features connect to LUT nodes, creating complete network layers.
+
+```python
+from difflut.layers import RandomLayer
+from difflut.nodes import LinearLUTNode
+
+# Create a layer with random connectivity
+layer = RandomLayer(
+    input_size=784,           # MNIST flattened
+    output_size=128,          # Hidden layer size
+    node_type=LinearLUTNode,  # Pass the class, not string
+    n=4,                      # Number of inputs per LUT
+    node_kwargs={'input_dim': [4], 'output_dim': [1]}
+)
+
+# Use like any PyTorch module
+x = torch.randn(32, 784)
+output = layer(x)  # Shape: (32, 128)
+```
+
+
+Layers connect features to LUT nodes. Types: RandomLayer, LearnableLayer, GroupedLayer, ResidualLayer.
+
+
+
+
+## Quick Start
+
+```python
+import torch
+import torch.nn as nn
+from difflut.encoder import ThermometerEncoder
+from difflut.layers import RandomLayer
+
+class SimpleLUTNetwork(nn.Module):
+    def __init__(self, input_size=784, hidden_size=128, num_classes=10):
+        super().__init__()
+        
+        # Encoder: 8 bits per input feature
+        self.encoder = ThermometerEncoder(num_bits=8)
+        encoded_size = input_size * 8
+        
+        # Hidden layer: Random connectivity with 4-input LUTs
+        self.hidden = RandomLayer(
+            input_size=encoded_size,
+            output_size=hidden_size,
+            node_type=LinearLUTNode,
+            n=4,
+            node_kwargs={'input_dim': [4], 'output_dim': [1]}
+        )
+        
+        # Output layer
+        self.output = RandomLayer(
+            input_size=hidden_size,
+            output_size=num_classes,
+            node_type=LinearLUTNode,
+            n=4,
+            node_kwargs={'input_dim': [4], 'output_dim': [1]}
+        )
+    
+    def forward(self, x):
+        # Flatten and encode
+        x = x.view(x.size(0), -1)
+        x = self.encoder(x)
+        
+        # LUT layers
+        x = torch.relu(self.hidden(x))
+        x = self.output(x)
+        return x
+
+# Create and use the model
+model = SimpleLUTNetwork()
+x = torch.randn(32, 1, 28, 28)  # Batch of MNIST images
+output = model(x)
+print(f"Output shape: {output.shape}")  # (32, 10)
+```
+
+
+## Advanced Usage
+
+### Encoder Fitting and Usage
+
+Encoders need to be fitted to your data to learn the appropriate value ranges:
+
+```python
+from difflut.encoder import ThermometerEncoder, GrayEncoder
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+# Load training data
+train_dataset = datasets.MNIST(root='./data', train=True, download=True,
+                               transform=transforms.ToTensor())
+train_loader = DataLoader(train_dataset, batch_size=1000, shuffle=True)
+
+# Get a sample of data for fitting
+sample_data = next(iter(train_loader))[0]
+sample_data = sample_data.view(sample_data.size(0), -1)  # Flatten
+
+# Create and fit encoder
+encoder = ThermometerEncoder(num_bits=8)
+encoder.fit(sample_data)
+
+# Now the encoder is ready to use
+# You can save the fitted encoder and reuse it
+encoded_sample = encoder(sample_data)
+print(f"Original shape: {sample_data.shape}")    # (1000, 784)
+print(f"Encoded shape: {encoded_sample.shape}")  # (1000, 784*8)
+
+# For different encoder types
+gray_encoder = GrayEncoder(num_bits=8, feature_wise=True)
+gray_encoder.fit(sample_data)
+gray_encoded = gray_encoder(sample_data)
+```
+
+### Custom Node Implementation
+
+Create your own LUT node by extending `BaseNode`:
+
 ```python
 from difflut.nodes import BaseNode
 from difflut import register_node
 
 @register_node('MyCustomNode')
-class YourCustomNode(BaseNode):
+class CustomLUTNode(BaseNode):
+    def __init__(self, input_dim=None, output_dim=None, **kwargs):
+        super().__init__(input_dim=input_dim, output_dim=output_dim, **kwargs)
+        # Initialize your custom parameters
+        # num_inputs is computed from input_dim
+        self.custom_weights = nn.Parameter(torch.randn(2**self.num_inputs, self.num_outputs))
+    
     def forward_train(self, x):
-        # Forward pass during training
-        pass
-
+        """Forward pass during training"""
+        # Implement differentiable forward pass
+        indices = self._binary_to_index(x)
+        return self.custom_weights[indices]
+    
     def forward_eval(self, x):
-        # Forward pass during evaluation
-        pass
+        """Forward pass during evaluation (can be quantized)"""
+        return self.forward_train(x)
     
     def backward_input(self, grad_output):
-        # Custom input gradient
-        pass
+        """Custom gradient w.r.t inputs"""
+        # Return input gradients
+        return grad_output
     
     def backward_weights(self, grad_output):
-        # Custom weight gradient  
+        """Custom gradient w.r.t weights"""
+        # Update self.custom_weights.grad
         pass
-
+    
     def regularization(self):
-        # Compute node-specific regularization term for weights
-        pass
-
+        """Compute regularization loss"""
+        return 0.0
+    
     def export_bitstream(self):
-        # Generate LUT bitstream/configuration for FPGA
-        pass
+        """Export LUT configuration for FPGA"""
+        return self.custom_weights.detach().cpu().numpy()
 ```
 
-### FPGA Deployment
+### Using Different Layer Types
 
 ```python
-from difflut.utils.fpga_export import export_to_rtl
+from difflut.layers import LearnableLayer, GroupedLayer, ResidualLayer, RandomLayer
+from difflut.nodes import PolyLUTNode, NeuralLUTNode, GradientStabilizedNode
 
-# Export trained model to SystemVerilog
-export_to_rtl(model, "output_design.sv")
+# Learnable connectivity - learns which inputs to use
+learnable_layer = LearnableLayer(
+    input_size=512,
+    output_size=256,
+    node_type=PolyLUTNode,
+    n=6,
+    node_kwargs={'input_dim': [6], 'output_dim': [1], 'degree': 3}
+)
+
+# Grouped connectivity - semantic input grouping
+grouped_layer = GroupedLayer(
+    input_size=512,
+    output_size=256,
+    num_groups=8,
+    node_type=NeuralLUTNode,
+    n=4,
+    node_kwargs={'input_dim': [4], 'output_dim': [1], 'hidden_width': 32}
+)
+
+# Residual layer - adds skip connections for deeper networks
+residual_layer = ResidualLayer(
+    input_size=256,
+    output_size=256,
+    base_layer_type=RandomLayer,
+    node_type=GradientStabilizedNode,
+    n=4,
+    node_kwargs={'input_dim': [4], 'output_dim': [1], 'gradient_scale': 1.0},
+    residual_weight=0.5
+)
 ```
 
-### Examples
+## Component Registry
+Use the registry utilities to list or fetch available encoders, nodes, and layers by name.
 
-Check out the MNIST tutorial notebook for a complete example:
-```bash
-jupyter notebook examples/mnist_difflut_tutorial.ipynb
-```
+DiffLUT uses a registration system for easy component discovery:
 
-Or run a simple test:
-```bash
-python examples/simple_mnist_test.py
-```
-
-## Experiments Pipeline (Hydra + SQLite Tracking)
-
-The new modular pipeline in `experiments/` replaces ad‑hoc single scripts and provides:
-
-| Capability | Description |
-|------------|-------------|
-| Configuration | Hydra hierarchical configs (`configs/`) with command‑line overrides |
-| Datasets | MNIST, FashionMNIST, CIFAR10 (thermometer encoded) via pluggable dataloaders |
-| Models | DiffLUT feed‑forward architecture (configurable layers & nodes) |
-| Tracking | SQLite database (`results/experiments.db`) with experiments, measurement points, metrics & checkpoints |
-| Checkpoints | Best validation model saved automatically (validation accuracy) |
-| Reproducibility | Full resolved Hydra config stored per run (`experiments/outputs/.../.hydra`) |
-| Automation | SLURM + Singularity scripts for sweeps and batch runs |
-
-### Quick Run (Local)
-```bash
-cd experiments
-python run_experiment.py            # Uses defaults: model=layered_feedforward, dataloaders=mnist
-```
-
-### Common Hydra Overrides
-```bash
-# Switch dataset
-python experiments/run_experiment.py dataloaders=fashionmnist
-
-# Change node type (flattened params interface)
-python experiments/run_experiment.py model.params.node_type=neurallut
-
-# Change layer mapping strategy
-python experiments/run_experiment.py model.params.layer_type=learnable
-
-# Adjust hidden sizes & LUT inputs (n)
-python experiments/run_experiment.py 'model.params.hidden_sizes=[1500,1500]' model.params.num_inputs=8
-
-# Training hyperparameters
-python experiments/run_experiment.py training.epochs=15 training.lr=0.001 training.batch_size=256
-
-# Combine multiple overrides + custom experiment name
-python experiments/run_experiment.py \
-    experiment_name=mnist_neurallut_learnable \
-    dataloaders=mnist \
-    model.params.node_type=neurallut \
-    model.params.layer_type=learnable \
-    training.epochs=20 training.lr=0.005
-```
-
-### What Gets Logged
-The SQLite database (`results/experiments.db`) has three tables:
-1. `experiments` – full config snapshot + high‑level metadata (device, status)
-2. `measurement_points` – per epoch (and phase) timing & indexing
-3. `metrics` – metric name/value pairs plus checkpoint info (is_best, path)
-
-### Query Results
-```bash
-cd experiments
-python query_results.py                 # Lists experiments + best metrics
-```
-Programmatic example:
 ```python
-from experiments.utils.db_manager import DBManager
-db = DBManager()                     # Automatically finds results/experiments.db
-exps = db.list_experiments(limit=5)
-metrics = db.get_experiment_metrics(exps[0].id, phase='val')
-best_ckpt = db.get_best_checkpoint(exps[0].id, metric_name='accuracy')
+from difflut.registry import get_registered_nodes, get_node_class
+from difflut.registry import get_registered_layers, get_layer_class
+from difflut.registry import get_registered_encoders, get_encoder_class
+
+# List all available components
+print(get_registered_nodes())
+# ['linear_lut', 'polylut', 'neurallut', 'dwn', 'probabilistic', 'fourier', 'hybrid', 'gradient_stabilized']
+
+print(get_registered_layers())
+# ['random', 'learnable', 'grouped', 'residual']
+
+print(get_registered_encoders())
+# ['thermometer', 'gaussian', 'distributive', 'gray', 'onehot', 'binary', 'signmagnitude', 'logarithmic']
+
+# Get a component class by its registered name
+NodeClass = get_node_class('linear_lut')
+node = NodeClass(input_dim=[4], output_dim=[1])
+
+# Or import directly
+from difflut.nodes import LinearLUTNode
+node = LinearLUTNode(input_dim=[4], output_dim=[1])
 ```
 
-### SLURM + Singularity
-Submit a single experiment (inside project root):
+## Package Structure
+
+DiffLUT is organized as a self-contained Python package:
+
+```
+difflut/                # Top-level package directory
+├── LICENSE             # License file
+├── README.md           # Project documentation
+├── __init__.py         # Package marker
+├── difflut/            # Main library code
+│   ├── __init__.py
+│   ├── encoder/        # Input encoders (thermometer, gray, etc.)
+│   ├── layers/         # Layer types (random, learnable, etc.)
+│   ├── nodes/          # LUT node types and CUDA kernels
+│   ├── registry.py     # Component registration utilities
+│   └── utils/          # Utility functions (FPGA export, regularizers)
+├── examples/           # Example scripts and notebooks
+├── pyproject.toml      # Build system config
+└── setup.py            # Installation script
+```
+
+
+## Distribution and Publishing
+
+### Building Distribution Packages
+
 ```bash
-sbatch scripts/run_experiment.sh                       # defaults
-sbatch scripts/run_experiment.sh model.params.node_type=polylut training.epochs=12
+cd difflut/
+python -m build
 ```
-Node type sweep (array job):
+
+This creates:
+- `dist/difflut-1.1.0.tar.gz` - Source distribution
+- `dist/difflut-1.1.0-*.whl` - Wheel distribution (if applicable)
+
+Note: CUDA extensions are compiled during installation, not during wheel building.
+
+### Installing from Source Distribution
+
 ```bash
-sbatch scripts/sweep_node_types.sh
-```
-Inspect status & logs:
-```bash
-squeue -u $USER
-tail -f logs/experiment_<job_id>.log
+pip install difflut-1.1.0.tar.gz
 ```
 
-### Configuration Notes
-Flattened model parameter keys (preferred for overrides):
-| Key | Meaning |
-|-----|---------|
-| `model.params.node_type` | DiffLUT node variant (linear_lut, neurallut, polylut, dwn, probabilistic, unbound_probabilistic) |
-| `model.params.layer_type` | Layer mapping strategy (random, cyclic, learnable) |
-| `model.params.hidden_sizes` | List of hidden layer widths (quoted when overriding) |
-| `model.params.num_inputs` | LUT input arity (n) |
-| `dataloaders` | Dataset choice (mnist, fashionmnist, cifar10) |
-| `dataloaders.subset_size` | Training subset for quick iteration |
-| `training.*` | Standard training hyperparameters |
 
-Legacy nested form (`model.params.layers[0].node.type`) is still supported internally but not recommended because Hydra's override grammar is stricter with list indexing.
+## Contributing
+Extend BaseNode, BaseLUTLayer, or BaseEncoder and register your component. See existing code for examples.
 
-### Migration from `examples/simple_mnist_test.py`
-| Old | New |
-|-----|-----|
-| Monolithic training script | Modular pipeline (data, model, trainer) |
-| Manual hyperparameter edits | Hydra overrides (no code changes) |
-| No tracking | Structured DB logging + checkpoints |
-| Hard to sweep | SLURM array scripts & overrides |
+To add new components:
 
-If you still need the old script for reference it remains in `examples/`, but new experiments should use the pipeline.
+1. **New Node**: Extend `BaseNode` and use `@register_node` decorator
+2. **New Layer**: Extend `BaseLUTLayer` and use `@register_layer` decorator
+3. **New Encoder**: Extend `BaseEncoder` and use `@register_encoder` decorator
 
-### Troubleshooting
-| Symptom | Fix |
-|---------|-----|
-| `Could not find 'dataloaders/XYZ'` | Ensure `dataloaders=xyz` matches a file in `configs/dataloaders/` |
-| `LexerNoViableAltException` | Quote list overrides: `'model.params.hidden_sizes=[1500,1500]'` |
-| No rows in DB | Verify write permissions to `results/` and that run wasn't aborted early |
-| CUDA not used | Check `torch.cuda.is_available()` inside log; ensure `--gres=gpu:1` in SBATCH |
+See existing implementations in `nodes/`, `layers/`, and `encoder/` for examples.
 
-### Minimal End‑to‑End Example
-```bash
-# 1. Quick sanity run (CPU ok)
-python experiments/run_experiment.py training.epochs=1 dataloaders.subset_size=500
 
-# 2. Inspect DB
-python experiments/query_results.py
+## Related Projects
+Part of the DiffLUT Research Framework.
 
-# 3. GPU SLURM job
-sbatch scripts/run_experiment.sh training.epochs=5 model.params.node_type=neurallut
-```
+This library is part of the larger **DiffLUT Research Framework**:
+- **Parent Project**: Full experiment pipeline with Hydra configs, SLURM scripts
+- **Repository**: https://gitlab.ethz.ch/disco-students/hs25/difflut
+- **Experiments**: See `experiments/` directory in parent project
 
-### Experiments
-Master thesis & research experiments are now fully managed via the `experiments/` pipeline (see section above). Use singularity + SLURM scripts in `scripts/` for cluster execution.
-
-Example (manual singularity execution):
-```bash
-singularity exec --nv \
-    --bind $(pwd):/workspace \
-    containers/pytorch_universal_minimal.sif \
-    bash -c "cd /workspace/experiments && python run_experiment.py model.params.node_type=neurallut"
-```
 
 ## Citation
+
 If you use DiffLUT in your research, please cite:
 
 ```bibtex
-@mastersthesis{buehrer2025difflut,
+@software{difflut2025,
   title={DiffLUT: Differentiable LUT Networks for Efficient FPGA Deployment},
-  author={Simon Jonas Bührer, Andreas Plesner, Aczel Till, Roger Wattenhofer},
-  school={ETH Zurich},
-  year={2026}
+  author={B\"uhrer, Simon Jonas},
+  year={2025},
+  institution={ETH Zurich, Distributed Computing Group},
+  url={https://gitlab.ethz.ch/disco-students/hs25/difflut}
 }
 ```
 
-# THE COMAND YOU MUST NOW
-srun  --mem=25GB --gres=gpu:01 --exclude=tikgpu[06-10] --pty bash -i
-
-singularity exec --writable-tmpfs --nv --bind /usr/itetnas04:/usr/itetnas04 --pwd /usr/itetnas04/data-scratch-01/sbuehrer/data/difflut containers/pytorch_universal_minimal.sif bash -c "export CUDA_HOME=/usr/local/cuda && export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:\$LD_LIBRARY_PATH && pip install --no-build-isolation -e ."
-
-
-python notebooks/visualize_weights.py --checkpoints results/checkpoints --param_name all --bins 256 --output outputs/weights_over_time.png
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+MIT License - See LICENSE file for details.
+
+
+## Contact
+
+- **Author**: Simon Jonas Bührer
+- **Email**: sbuehrer@ethz.ch
+- **Institution**: ETH Zurich, Distributed Computing Group
+- **Issues**: https://gitlab.ethz.ch/disco-students/hs25/difflut/-/issues

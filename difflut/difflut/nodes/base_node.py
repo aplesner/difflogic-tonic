@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from typing import Optional
+import warnings
 
 class CustomNodeFunction(torch.autograd.Function):
     """
@@ -102,11 +103,12 @@ class BaseNode(nn.Module, ABC):
     Abstract base class for all LUT nodes with automatic gradient handling
     """
     
-    def __init__(self, num_inputs: int, use_surrogate: bool = True, 
-                 regularizers: dict = None):
+    def __init__(self, input_dim: list = None, output_dim: list = None, 
+                 use_surrogate: bool = True, regularizers: dict = None):
         """
         Args:
-            num_inputs: Number of inputs to the LUT node
+            input_dim: Input dimensions as a list (e.g., [6] for 6 inputs, [6, 6] for 6x6 inputs)
+            output_dim: Output dimensions as a list (e.g., [1] for single output, [4] for 4 outputs)
             use_surrogate: Whether to use surrogate gradients (if implemented)
             regularizers: Dict of regularization functions to apply.
                          Format: {"name": [reg_fn, weight], ...}
@@ -114,9 +116,40 @@ class BaseNode(nn.Module, ABC):
                          and returns a scalar tensor, and weight is a float.
         """
         super().__init__()
-        self.num_inputs = num_inputs
+        
+        # Set defaults if not provided
+        self.input_dim = input_dim if input_dim is not None else [1]
+        self.output_dim = output_dim if output_dim is not None else [1]
+        
+        # For backward compatibility, compute num_inputs as the product of input dimensions
+        self.num_inputs = int(torch.prod(torch.tensor(self.input_dim)).item())
+        self.num_outputs = int(torch.prod(torch.tensor(self.output_dim)).item())
+        
+        # Warn about potentially large LUT sizes
+        lut_size = 2 ** self.num_inputs
+        if self.num_inputs > 10:
+            warnings.warn(
+                f"Node initialized with {self.num_inputs} inputs, resulting in a LUT size of {lut_size}. "
+                f"Large LUT sizes (>1024 entries) can cause memory issues and slow training. "
+                f"Consider using fewer inputs (n<=10) or using grouped/residual layers to reduce complexity.",
+                RuntimeWarning,
+                stacklevel=3
+            )
+        
         self.use_surrogate = use_surrogate
         self.regularizers = regularizers or {}
+        
+        # Warn if regularizers are provided but not in expected format
+        if regularizers:
+            for name, value in regularizers.items():
+                if not isinstance(value, (list, tuple)) or len(value) != 2:
+                    warnings.warn(
+                        f"Regularizer '{name}' should be a list/tuple of [function, weight], "
+                        f"but got {type(value).__name__}. This regularizer may not work correctly. "
+                        f"Example: regularizers={{'l2': [l2_weights, 0.01]}}",
+                        UserWarning,
+                        stacklevel=3
+                    )
     
     @abstractmethod
     def forward_train(self, x: torch.Tensor) -> torch.Tensor:
@@ -203,6 +236,35 @@ class BaseNode(nn.Module, ABC):
         """
         device = next(self.parameters()).device if list(self.parameters()) else 'cpu'
         return torch.tensor(0.0, device=device)
+    
+    def _prepare_input(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Prepare input tensor by handling different input dimensions.
+        Squeezes middle dimension if input is 3D.
+        
+        Args:
+            x: Input tensor of shape (batch_size, num_inputs) or (batch_size, 1, num_inputs)
+        
+        Returns:
+            Tensor of shape (batch_size, num_inputs)
+        """
+        if x.dim() == 3:
+            x = x.squeeze(1)
+        return x
+    
+    def _prepare_output(self, output: torch.Tensor) -> torch.Tensor:
+        """
+        Prepare output tensor by squeezing if single output dimension.
+        
+        Args:
+            output: Output tensor of shape (batch_size, num_outputs)
+        
+        Returns:
+            Tensor of shape (batch_size,) if num_outputs==1, else (batch_size, num_outputs)
+        """
+        if self.num_outputs == 1 and output.dim() > 1:
+            output = output.squeeze(-1)
+        return output
     
     def export_bitstream(self) -> list:
         """
