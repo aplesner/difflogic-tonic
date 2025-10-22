@@ -225,6 +225,6 @@ class NeuralLUTNode(BaseNode):
         return f"input_dim={self.input_dim}, output_dim={self.output_dim}, " \
                f"hidden_width={self.hidden_width}, depth={self.depth}, " \
                f"skip_interval={self.skip_interval}, activation={self.activation_type}, " \
-               f"grad_factor={self.grad_factor}", \
+               f"grad_factor={self.grad_factor}," \
                f"tau={self.tau:.4f}, tau_start={self.tau_start}, " \
                f"tau_min={self.tau_min}, tau_decay_iters={self.tau_decay_iters}"

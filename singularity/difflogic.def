@@ -89,7 +89,7 @@ Stage: build
     echo "Using MAX_JOBS=$MAX_JOBS for parallel build"
 
     # Install in regular mode (not editable) to avoid symlink issues
-    pip3 install --no-cache-dir --no-build-isolation -vv .
+    pip3 install .
 
     echo "=============================================="
     echo "DiffLUT installation complete"
