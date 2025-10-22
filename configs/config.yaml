@@ -20,6 +20,7 @@ base:
 
 model:
   tags: []
+  model_type: ???
 
 dataset:
   tags: []
@@ -71,6 +72,3 @@ train:
     accumulate_grad_batches: 1
     check_val_every_n_epoch: 1
     num_sanity_val_steps: 2
-
-model:
-  model_type: ???

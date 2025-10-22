@@ -7,7 +7,7 @@
 #SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --time=8:00:00
-#SBATCH --nodelist=tikgpu06,tikgpu07,tikgpu08,tikgpu09
+#SBATCH --nodelist=tikgpu06,tikgpu07,tikgpu09
 #SBATCH --gres=gpu:1
 
 # SLURM Job Array Script for DiffLUT Node Type Comparison
