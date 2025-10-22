@@ -13,13 +13,36 @@ model:
         depth: 2
         skip_interval: 2
         activation: leakyrelu
+      dwn:
+        node_type: dwn
+        use_cuda: true
+      polylut:
+        node_type: polylut
+        degree: 8
+      probabilistic:
+        node_type: probabilistic
+        temperature: 1.0
+        eval_mode: expectation
+        use_cuda: true
+      hybrid:
+        node_type: hybrid
+        use_cuda: true
+      fourier:
+        node_type: fourier
+        use_all_frequencies: true
+        max_amplitude: 0.5
+        use_cuda: true
+      gradient_stabilized:
+        node_type: gradient_stabilized
+        use_cuda: true
+        gradient_scale: 1.0
 
     layertypes:
       learnable:
         layer_type: learnable
         tau: 0.5
       random:
-        layter_type: random
+        layer_type: random
 
     n: 2
     num_layers: 2
