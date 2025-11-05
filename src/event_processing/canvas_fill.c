@@ -19013,7 +19013,7 @@ static void __pyx_f_11canvas_fill_zero_and_fill_canvas_c(__Pyx_memviewslice __py
  *         xi = x[j]
  *         yi = y[j]             # <<<<<<<<<<<<<<
  *         pi = p[j]
- *         img[yi, xi, pi] = 1
+ *         img[yi, xi, pi] += 1
 */
     __pyx_t_6 = __pyx_v_j;
     __pyx_v_yi = (*((int *) ( /* dim=0 */ (__pyx_v_y.data + __pyx_t_6 * __pyx_v_y.strides[0]) )));
@@ -19022,7 +19022,7 @@ static void __pyx_f_11canvas_fill_zero_and_fill_canvas_c(__Pyx_memviewslice __py
  *         xi = x[j]
  *         yi = y[j]
  *         pi = p[j]             # <<<<<<<<<<<<<<
- *         img[yi, xi, pi] = 1
+ *         img[yi, xi, pi] += 1
  * 
 */
     __pyx_t_6 = __pyx_v_j;
@@ -19031,14 +19031,14 @@ static void __pyx_f_11canvas_fill_zero_and_fill_canvas_c(__Pyx_memviewslice __py
     /* "canvas_fill.pyx":31
  *         yi = y[j]
  *         pi = p[j]
- *         img[yi, xi, pi] = 1             # <<<<<<<<<<<<<<
+ *         img[yi, xi, pi] += 1             # <<<<<<<<<<<<<<
  * 
  * 
 */
     __pyx_t_6 = __pyx_v_yi;
     __pyx_t_5 = __pyx_v_xi;
     __pyx_t_4 = __pyx_v_pi;
-    *((unsigned char *) ( /* dim=2 */ (( /* dim=1 */ (( /* dim=0 */ (__pyx_v_img.data + __pyx_t_6 * __pyx_v_img.strides[0]) ) + __pyx_t_5 * __pyx_v_img.strides[1]) ) + __pyx_t_4 * __pyx_v_img.strides[2]) )) = 1;
+    *((unsigned char *) ( /* dim=2 */ (( /* dim=1 */ (( /* dim=0 */ (__pyx_v_img.data + __pyx_t_6 * __pyx_v_img.strides[0]) ) + __pyx_t_5 * __pyx_v_img.strides[1]) ) + __pyx_t_4 * __pyx_v_img.strides[2]) )) += 1;
   }
 
   /* "canvas_fill.pyx":12

@@ -28,7 +28,7 @@ cdef void zero_and_fill_canvas_c(unsigned char[:, :, :] img,
         xi = x[j]
         yi = y[j]
         pi = p[j]
-        img[yi, xi, pi] = 1
+        img[yi, xi, pi] += 1
 
 
 def zero_and_fill_canvas(np.ndarray[np.uint8_t, ndim=3] img, 

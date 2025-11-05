@@ -29,10 +29,15 @@ warnings.filterwarnings('always', module='difflut')
 warnings.filterwarnings('error', module='difflut')
 """
 
-import warnings
-
 # Import registry first
-from .registry import REGISTRY, register_node, register_layer, register_encoder
+from .registry import (
+    REGISTRY,
+    register_node,
+    register_layer,
+    register_encoder,
+    register_initializer,
+    register_regularizer,
+)
 
 # Import base classes
 from .nodes.base_node import BaseNode
@@ -48,14 +53,12 @@ from .nodes import (
     ProbabilisticNode,
     HybridNode,
     FourierNode,
-    GradientStabilizedNode,
+    DWNStableNode,
 )
 
 from .layers import (
     RandomLayer,
     LearnableLayer,
-    GroupedLayer,
-    ResidualLayer,
 )
 
 from .encoder import (
@@ -69,13 +72,13 @@ from .encoder import (
     LogarithmicEncoder,
 )
 
+from .models import (
+    feedforward_core,
+    feedforward,
+)
+
 from .utils import (
     GroupSum,
-    l_regularizer,
-    l1_regularizer,
-    l2_regularizer,
-    spectral_regularizer,
-    COMMON_REGULARIZERS,
     # Warning utilities
     DiffLUTWarning,
     PerformanceWarning,
@@ -91,13 +94,12 @@ from .utils import (
 __version__ = "1.0.10"
 
 __all__ = [
-    # Registry
     'REGISTRY',
     'register_node',
     'register_layer',
     'register_encoder',
-    
-    # Base classes
+    'register_initializer',
+    'register_regularizer',
     'BaseNode',
     'BaseLUTLayer',
     'BaseEncoder',
@@ -108,15 +110,14 @@ __all__ = [
     'NeuralLUTNode',
     'PolyLUTNode',
     'ProbabilisticNode',
+    'ProbabilisticStableNode',
     'HybridNode',
     'FourierNode',
-    'GradientStabilizedNode',
+    'DWNStableNode',
     
     # Layers
     'RandomLayer',
     'LearnableLayer',
-    'GroupedLayer',
-    'ResidualLayer',
     
     # Encoders
     'ThermometerEncoder',
@@ -127,14 +128,13 @@ __all__ = [
     'BinaryEncoder',
     'SignMagnitudeEncoder',
     'LogarithmicEncoder',
+
+    # Models
+    'feedforward_core',
+    'feedforward',
     
     # Utils
     'GroupSum',
-    'l_regularizer',
-    'l1_regularizer',
-    'l2_regularizer',
-    'spectral_regularizer',
-    'COMMON_REGULARIZERS',
     
     # Warning utilities
     'DiffLUTWarning',

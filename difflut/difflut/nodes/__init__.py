@@ -11,7 +11,7 @@ from .polylut_node import PolyLUTNode
 from .neurallut_node import NeuralLUTNode
 from .hybrid_node import HybridNode
 from .fourier_node import FourierNode
-from .gradient_stabilized_node import GradientStabilizedNode
+from .dwn_stable_node import DWNStableNode
 
 __all__ = [
     'BaseNode',
@@ -22,5 +22,5 @@ __all__ = [
     'NeuralLUTNode',
     'HybridNode',
     'FourierNode',
-    'GradientStabilizedNode',
+    'DWNStableNode',
 ]

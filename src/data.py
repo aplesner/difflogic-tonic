@@ -76,6 +76,10 @@ class SensorSizes(enum.Enum):
     """
     NMNIST = (34, 34, 2)  # tonic.datasets.NMNIST.sensor_size
     CIFAR10DVS = (128, 128, 2)  # tonic.datasets.CIFAR10DVS.sensor_size
+    DVSGesture = (128, 128, 2)  # tonic.datasets.DVSGesture.sensor_size
+    DVSLips = (128, 128, 2)  # tonic.datasets.DVSLips.sensor_size
+    ASL_DVS = (240, 180, 2)  # tonic.datasets.ASL_DVS.sensor_size
+    NCALTECH101 = (240, 180, 2)  # the NCALTECH101 dataset images are various sizes, but the max is 240x180
 
 
 class OutputClasses(enum.Enum):

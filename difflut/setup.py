@@ -10,11 +10,20 @@ cuda_available = False
 try:
     import torch
     from torch.utils.cpp_extension import BuildExtension, CUDAExtension
-    cuda_available = torch.cuda.is_available() and (os.environ.get('CUDA_HOME') or os.environ.get('CUDA_PATH'))
+    # Check if CUDA_HOME is set (don't rely on torch.cuda.is_available() during build)
+    cuda_home = os.environ.get('CUDA_HOME') or os.environ.get('CUDA_PATH')
+    if cuda_home:
+        print(f"CUDA_HOME detected: {cuda_home}")
+        cuda_available = True
+    else:
+        print("CUDA_HOME not set. Checking torch.cuda.is_available()...")
+        cuda_available = torch.cuda.is_available()
 except ImportError:
-    print("Warning: PyTorch not found, CUDA extensions will not be built.")
+    raise ImportError("PyTorch is required to build CUDA extensions.")
 except Exception as e:
-    print(f"Warning: Could not check CUDA availability: {e}")
+    # reraise any other exceptions
+    print(f"Error checking CUDA availability")
+    raise e
 
 cuda_dir = os.path.join('difflut', 'nodes', 'cuda')
 
@@ -50,7 +59,7 @@ setup_args = dict(
     ],
     python_requires='>=3.7',
     description='Differentiable LUT-based neural networks',
-    author='Simon Buehrer',
+    author='Simon Buehrer, Andreas Plesner, Till Aczel et al.',
     license='MIT',
 )
 

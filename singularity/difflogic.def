@@ -12,7 +12,8 @@ Stage: build
 
 %setup
     # Copy entire difflut package (including nested structure and setup.py)
-    cp -r difflut ${APPTAINER_ROOTFS}/opt/
+    mkdir -p ${APPTAINER_ROOTFS}/opt/difflut
+    cp -r difflut ${APPTAINER_ROOTFS}/opt/difflut/
 
 %post
     ##################################################
@@ -22,7 +23,6 @@ Stage: build
         g++ \
         make \
         cmake \
-        ccache \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,16 +31,10 @@ Stage: build
     ##################################################
     # We omit the 3090s, A100s and A6000s for faster compile times
     # If you want to include them, uncomment the line below
-    # export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5"
-    export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6"
+    # export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6"
+    export TORCH_CUDA_ARCH_LIST="8.6"
     export CUDA_HOME=/usr/local/cuda
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
-
-    # Setup ccache for faster rebuilds
-    export PATH=/usr/lib/ccache:$PATH
-    export CCACHE_DIR=/tmp/ccache
-    export CCACHE_MAXSIZE=5G
-    mkdir -p /tmp/ccache
 
     ##################################################
     # Python Packages
@@ -62,8 +56,7 @@ Stage: build
         ipywidgets \
         notebook \
         ipykernel \
-        pydantic \
-        difflogic
+        pydantic
         
     # Verify the hydra installation
     python3 -c "import hydra; print('Hydra version:', hydra.__version__)"
@@ -75,13 +68,8 @@ Stage: build
     echo "Building DiffLUT with CUDA extensions..."
     echo "=============================================="
 
-    cd /opt/difflut
-    echo "DEBUG: Contents of /opt/difflut:"
-    ls -la
-    echo "DEBUG: Checking outer __init__.py:"
-    cat __init__.py
-    echo "DEBUG: Checking inner __init__.py version:"
-    grep "__version__" difflut/__init__.py || echo "No __version__ found in inner __init__.py"
+    cd /opt/difflut/difflut
+    ls -l .
 
     # Set MAX_JOBS to number of CPU cores minus 2 for parallel build
     export MAX_JOBS=$(( $(nproc) - 2 ))
@@ -89,19 +77,15 @@ Stage: build
     echo "Using MAX_JOBS=$MAX_JOBS for parallel build"
 
     # Install in regular mode (not editable) to avoid symlink issues
-    pip3 install .
+    pip3 install --no-cache-dir --no-build-isolation .
 
-    echo "=============================================="
-    echo "DiffLUT installation complete"
-    echo "DEBUG: Installed package location:"
-    python3 -c "import difflut; print('Module location:', difflut.__file__)"
-    echo "DEBUG: Contents of installed __init__.py:"
-    python3 -c "import difflut; import os; print(open(difflut.__file__).read()[:500])"
-    echo "Testing import:"
-    python3 -c "import difflut; print('Version:', difflut.__version__); from difflut.nodes import LinearLUTNode; print('Import successful')"
-    echo "ccache stats:"
-    ccache -s
-    echo "=============================================="
+    echo "DiffLUT installation complete. Running Import Test:"
+    python3 test_import.py
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Import Test failed!"
+        exit 1
+    fi
+    echo "Import Test passed successfully"
      
     ##################################################
     # Prepare artifacts
@@ -147,12 +131,7 @@ Stage: final
     
     # Verify DiffLUT installation
     echo "=============================================="
-    echo "DiffLUT installation complete"
-    echo "DEBUG: Installed package location:"
-    python3 -c "import difflut; print('Module location:', difflut.__file__)"
-    echo "DEBUG: Contents of installed __init__.py:"
-    python3 -c "import difflut; import os; print(open(difflut.__file__).read()[:500])"
-    echo "Testing import:"
+    echo "DiffLUT installation complete - verifying imports"
     python3 -c "import difflut; print('Version:', difflut.__version__); from difflut.nodes import LinearLUTNode; print('Import successful')"
     echo "=============================================="
     ldconfig  
