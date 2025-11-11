@@ -12,8 +12,8 @@ echo "=============================================="
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Container configuration
-CONTAINER_NAME="difflogic.sif"
-DEF_FILE="${PROJECT_ROOT}/singularity/difflogic.def"
+CONTAINER_NAME="difflut.sif"
+DEF_FILE="${PROJECT_ROOT}/singularity/difflut.def"
 OUTPUT_FILE="${PROJECT_ROOT}/singularity/${CONTAINER_NAME}"
 
 # Check if definition file exists

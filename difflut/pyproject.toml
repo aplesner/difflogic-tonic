@@ -1,20 +1,126 @@
-# pyproject.toml
 [build-system]
 requires = ["setuptools>=45", "wheel", "torch>=1.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "difflut"
-version = "1.0.10"
-description = "Differentiable LUT-based neural networks"
+version = "1.4.2"
+description = "Differentiable LUT-based neural networks for efficient FPGA deployment"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.10"  # Required for PEP 604 union type syntax (X | Y)
 license = {text = "MIT"}
 authors = [
-    {name = "Simon Buehrer"}
+    {name = "Simon Buehrer", email = "sbuehrer@ethz.ch"},
+    {name = "Andreas Plesner", email = "aplesner@ethz.ch"},
+    {name = "Till Aczel", email = "taczel@ethz.ch"}
+]
+maintainers = [
+    {name = "Simon Buehrer", email = "sbuehrer@ethz.ch"},
+    {name = "Andreas Plesner", email = "aplesner@ethz.ch"},
+    {name = "Till Aczel", email = "taczel@ethz.ch"}
+]
+keywords = ["deep-learning", "neural-networks", "lut", "fpga", "pytorch", "hardware-acceleration"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 dependencies = [
     "torch>=1.9.0",
-    "numpy",
+    "numpy>=1.19.0",
+]
+
+[project.optional-dependencies]
+# GPU support - builds with CUDA extensions
+gpu = []
+
+# CPU-only - skips CUDA build
+cpu = []
+
+# Development dependencies
+dev = [
+    "bump2version>=1.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "isort>=5.10.0",
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "jupyter>=1.0.0",
+    "matplotlib>=3.3.0",
+    "torchvision>=0.10.0",
+]
+
+# All optional dependencies
+all = [
+    "bump2version>=1.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "isort>=5.10.0",
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "jupyter>=1.0.0",
+    "matplotlib>=3.3.0",
+    "torchvision>=0.10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/aplesner/difflut"
+Documentation = "https://github.com/aplesner/difflut/tree/main/docs"
+Repository = "https://github.com/aplesner/difflut"
+Issues = "https://github.com/aplesner/difflut/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["difflut*"]
+exclude = ["tests*", "examples*", "docs*", "build*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-v",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: marks tests that require GPU (deselect with '-m \"not gpu\"')",
+    "skip_ci: marks tests to skip in CI (deselect with '-m \"not skip_ci\"')",
+    "experimental: marks tests as experimental (deselect with '-m \"not experimental\"')",
+    "training: marks tests that involve training (deselect with '-m \"not training\"')",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore:.*CUDA extension.*:RuntimeWarning",
+    "ignore:.*torch.searchsorted.*:UserWarning",
+    "ignore:.*was not provided, using default value.*:UserWarning",
 ]

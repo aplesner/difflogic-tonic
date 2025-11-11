@@ -29,121 +29,34 @@ warnings.filterwarnings('always', module='difflut')
 warnings.filterwarnings('error', module='difflut')
 """
 
-# Import registry first
-from .registry import (
-    REGISTRY,
-    register_node,
-    register_layer,
-    register_encoder,
-    register_initializer,
-    register_regularizer,
-)
+from .encoder.base_encoder import BaseEncoder
+from .layers.base_layer import BaseLUTLayer
 
 # Import base classes
 from .nodes.base_node import BaseNode
-from .layers.base_layer import BaseLUTLayer
-from .encoder.base_encoder import BaseEncoder
 
-# Import all implementations to trigger registration
-from .nodes import (
-    DWNNode,
-    LinearLUTNode,
-    NeuralLUTNode,
-    PolyLUTNode,
-    ProbabilisticNode,
-    HybridNode,
-    FourierNode,
-    DWNStableNode,
+# Import registry first
+from .registry import (
+    REGISTRY,
+    register_convolutional_layer,
+    register_encoder,
+    register_initializer,
+    register_layer,
+    register_node,
+    register_regularizer,
 )
 
-from .layers import (
-    RandomLayer,
-    LearnableLayer,
-)
-
-from .encoder import (
-    ThermometerEncoder,
-    GaussianThermometerEncoder,
-    DistributiveThermometerEncoder,
-    GrayEncoder,
-    OneHotEncoder,
-    BinaryEncoder,
-    SignMagnitudeEncoder,
-    LogarithmicEncoder,
-)
-
-from .models import (
-    feedforward_core,
-    feedforward,
-)
-
-from .utils import (
-    GroupSum,
-    # Warning utilities
-    DiffLUTWarning,
-    PerformanceWarning,
-    ConfigurationWarning,
-    configure_warnings,
-    enable_all_warnings,
-    disable_all_warnings,
-    disable_cuda_warnings,
-    enable_strict_mode,
-    suppress_warnings,
-)
-
-__version__ = "1.0.10"
+__version__ = "1.4.2"
 
 __all__ = [
-    'REGISTRY',
-    'register_node',
-    'register_layer',
-    'register_encoder',
-    'register_initializer',
-    'register_regularizer',
-    'BaseNode',
-    'BaseLUTLayer',
-    'BaseEncoder',
-    
-    # Nodes
-    'DWNNode',
-    'LinearLUTNode',
-    'NeuralLUTNode',
-    'PolyLUTNode',
-    'ProbabilisticNode',
-    'ProbabilisticStableNode',
-    'HybridNode',
-    'FourierNode',
-    'DWNStableNode',
-    
-    # Layers
-    'RandomLayer',
-    'LearnableLayer',
-    
-    # Encoders
-    'ThermometerEncoder',
-    'GaussianThermometerEncoder',
-    'DistributiveThermometerEncoder',
-    'GrayEncoder',
-    'OneHotEncoder',
-    'BinaryEncoder',
-    'SignMagnitudeEncoder',
-    'LogarithmicEncoder',
-
-    # Models
-    'feedforward_core',
-    'feedforward',
-    
-    # Utils
-    'GroupSum',
-    
-    # Warning utilities
-    'DiffLUTWarning',
-    'PerformanceWarning',
-    'ConfigurationWarning',
-    'configure_warnings',
-    'enable_all_warnings',
-    'disable_all_warnings',
-    'disable_cuda_warnings',
-    'enable_strict_mode',
-    'suppress_warnings',
+    "REGISTRY",
+    "register_node",
+    "register_layer",
+    "register_convolutional_layer",
+    "register_encoder",
+    "register_initializer",
+    "register_regularizer",
+    "BaseNode",
+    "BaseLUTLayer",
+    "BaseEncoder",
 ]

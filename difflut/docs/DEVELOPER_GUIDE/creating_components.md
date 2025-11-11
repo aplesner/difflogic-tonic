@@ -12,6 +12,74 @@ All DiffLUT components follow an extensible design:
 4. **Test** thoroughly
 5. **Optionally add** CUDA support for performance
 
+### Type-Safe Configuration
+
+DiffLUT uses type-safe configuration classes for nodes and layers:
+
+- **NodeConfig**: Type-safe parameters for nodes (input/output dimensions, initializers, regularizers, node-specific params)
+- **LayerConfig**: Type-safe parameters for layer training (bit flipping, gradient stabilization)
+
+```python
+from difflut.nodes.node_config import NodeConfig
+from difflut.layers.layer_config import LayerConfig
+from difflut.registry import REGISTRY
+
+# Node configuration with registry-retrieved functions
+init_fn = REGISTRY.get_initializer('kaiming_normal')
+reg_fn = REGISTRY.get_regularizer('l2')
+
+node_config = NodeConfig(
+    input_dim=6,
+    output_dim=1,
+    init_fn=init_fn,  # Retrieved from registry, NOT a string
+    init_kwargs={'a': 0.0, 'mode': 'fan_in'},
+    regularizers={'l2': reg_fn},  # Actual function objects, NOT strings
+    extra_params={'use_cuda': True}
+)
+
+# Layer training configuration
+layer_config = LayerConfig(
+    flip_probability=0.1,
+    grad_stabilization='layerwise',
+    grad_target_std=1.0
+)
+```
+
+**Why use these?**
+- Type safety and IDE autocomplete
+- Consistent parameter validation
+- Clear separation of node logic vs. layer training augmentation
+- Easy serialization for configuration files
+- Better error messages
+- Registry functions are validated at retrieval time (not string-based)
+
+**Critical Pattern for Initializers and Regularizers:**
+- ALWAYS retrieve from registry: `REGISTRY.get_initializer(name)`, `REGISTRY.get_regularizer(name)`
+- NEVER pass function names as strings to NodeConfig
+- Pass actual function objects to NodeConfig
+- Registry maintains single source of truth
+
+When creating custom components, ensure they work with these configuration classes:
+
+```python
+# Your custom node should accept NodeConfig parameters
+class MyCustomNode(BaseNode):
+    def __init__(self, input_dim, output_dim, init_fn=None, init_kwargs=None, 
+                 regularizers=None, my_custom_param=None, **kwargs):
+        super().__init__(input_dim, output_dim, init_fn, init_kwargs, regularizers, **kwargs)
+        # Custom logic with my_custom_param (passed via extra_params)
+        self.my_custom_param = kwargs.get('my_custom_param', my_custom_param)
+
+# Your custom layer should accept LayerConfig
+class MyCustomLayer(BaseLUTLayer):
+    def __init__(self, input_size, output_size, node_type, n, 
+                 node_kwargs=None, layer_config=None, **kwargs):
+        super().__init__(input_size, output_size, node_type, n, node_kwargs, layer_config, **kwargs)
+        # layer_config contains flip_probability, grad_stabilization, etc.
+```
+
+---
+
 ## Custom Nodes
 
 ### Creating a Custom Node
@@ -21,41 +89,101 @@ Nodes define computation at individual LUT units. Extend `BaseNode`:
 ```python
 import torch
 import torch.nn as nn
+from typing import Optional, Dict, Any, Callable
 from difflut.nodes import BaseNode
+from difflut.nodes.node_config import NodeConfig
+from difflut.utils.warnings import warn_default_value
 from difflut import register_node
+
+# Define module defaults at the top
+DEFAULT_MY_NODE_INPUT_DIM: int = 6
+DEFAULT_MY_NODE_OUTPUT_DIM: int = 1
 
 @register_node('my_custom_node')
 class MyCustomNode(BaseNode):
-    """My custom LUT node implementation."""
+    """
+    My custom LUT node implementation.
     
-    def __init__(self, input_dim=None, output_dim=None, **kwargs):
+    This node demonstrates the recommended pattern for all new components.
+    Processes 2D tensors: (batch_size, input_dim) → (batch_size, output_dim)
+    """
+    
+    def __init__(
+        self,
+        input_dim: Optional[int] = None,
+        output_dim: Optional[int] = None,
+        init_fn: Optional[Callable[[torch.Tensor], None]] = None,
+        init_kwargs: Optional[Dict[str, Any]] = None,
+        regularizers: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> None:
         """
-        Initialize the node.
+        Initialize the custom node.
         
-        Args:
-            input_dim: List [n] - number of binary inputs
-            output_dim: List [m] - number of outputs
-            **kwargs: Additional arguments
+        Parameters
+        ----------
+        input_dim : Optional[int]
+            Number of binary inputs. Defaults to DEFAULT_MY_NODE_INPUT_DIM.
+        output_dim : Optional[int]
+            Number of outputs. Defaults to DEFAULT_MY_NODE_OUTPUT_DIM.
+        init_fn : Optional[Callable]
+            Initialization function for weights.
+        init_kwargs : Optional[Dict[str, Any]]
+            Arguments for initialization function.
+        regularizers : Optional[Dict[str, Any]]
+            Custom regularization functions.
+        **kwargs : dict
+            Additional arguments (for compatibility).
+        
+        Note
+        ----
+        Each node instance processes 2D tensors independently.
+        Layers create multiple node instances using nn.ModuleList.
         """
-        super().__init__(input_dim=input_dim, output_dim=output_dim, **kwargs)
+        # Apply defaults with warnings
+        if input_dim is None:
+            input_dim = DEFAULT_MY_NODE_INPUT_DIM
+            warn_default_value("input_dim", input_dim, stacklevel=2)
         
-        # Initialize parameters
-        # self.num_inputs and self.num_outputs are set by parent class
+        if output_dim is None:
+            output_dim = DEFAULT_MY_NODE_OUTPUT_DIM
+            warn_default_value("output_dim", output_dim, stacklevel=2)
+        
+        # Call parent constructor (no layer_size parameter)
+        super().__init__(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            init_fn=init_fn,
+            init_kwargs=init_kwargs,
+            regularizers=regularizers,
+            **kwargs
+        )
+        
+        # Initialize parameters: shape (2^input_dim, output_dim)
         num_lut_entries = 2 ** self.num_inputs
         
         self.weights = nn.Parameter(
             torch.randn(num_lut_entries, self.num_outputs) * 0.01
         )
     
-    def forward_train(self, x):
+    def forward_train(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass during training.
         
-        Args:
-            x: Tensor of shape (batch, num_inputs) with binary values {0, 1}
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input of shape (batch_size, input_dim) with binary values {0, 1}
         
-        Returns:
-            Tensor of shape (batch, num_outputs)
+        Returns
+        -------
+        torch.Tensor
+            Output of shape (batch_size, output_dim)
+        
+        Note
+        ----
+        Each node instance processes 2D tensors independently.
+        No layer_size dimension - layers manage multiple nodes via nn.ModuleList.
         """
         # Convert binary input to table indices
         indices = self._binary_to_index(x)
@@ -63,40 +191,55 @@ class MyCustomNode(BaseNode):
         # Look up and return weights
         return self.weights[indices]
     
-    def forward_eval(self, x):
+    def forward_eval(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass during evaluation.
         
-        Can be different from training (e.g., quantized version).
+        Can differ from training (e.g., quantized version).
         Default: same as training.
         
-        Args:
-            x: Tensor of shape (batch, num_inputs) with binary values
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input of shape (batch, num_inputs) with binary values
         
-        Returns:
-            Tensor of shape (batch, num_outputs)
+        Returns
+        -------
+        torch.Tensor
+            Output of shape (batch, num_outputs)
         """
         return self.forward_train(x)
     
-    def regularization(self):
+    def regularization(self) -> torch.Tensor:
         """
-        Optional regularization loss.
+        Compute optional regularization loss.
         
-        Returns:
+        Returns
+        -------
+        torch.Tensor
             Scalar tensor representing regularization term
         """
         # Example: L2 regularization on weights
         return 0.001 * torch.sum(self.weights ** 2)
     
-    def export_bitstream(self):
+    def export_bitstream(self) -> Any:
         """
-        Export LUT configuration for FPGA.
+        Export LUT configuration for FPGA deployment.
         
-        Returns:
-            numpy array of shape (2^num_inputs, num_outputs)
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (2^num_inputs, num_outputs)
         """
         return self.weights.detach().cpu().numpy()
 ```
+
+**Key pattern elements:**
+1. **PEP 484 types** - Use `Optional[T]` instead of `T | None`
+2. **Module constants** - Define defaults at module level in CAPITALS
+3. **Default warnings** - Use `warn_default_value()` for traceability
+4. **Type-safe** - Full type hints enable IDE support and mypy checking
+5. **NumPy docstrings** - Document all parameters and return values
 
 ### Base Class Methods
 
@@ -117,7 +260,10 @@ class MyNode(BaseNode):
 ```python
 @register_node('poly_example')
 class PolyExampleNode(BaseNode):
-    """Polynomial approximation LUT node."""
+    """
+    Polynomial approximation LUT node.
+    Processes 2D tensors: (batch_size, input_dim) → (batch_size, output_dim)
+    """
     
     def __init__(self, input_dim=None, output_dim=None, degree=3, **kwargs):
         super().__init__(input_dim=input_dim, output_dim=output_dim, **kwargs)
@@ -130,6 +276,19 @@ class PolyExampleNode(BaseNode):
         ])
     
     def forward_train(self, x):
+        """
+        Forward pass with 2D tensors.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Shape (batch_size, input_dim) with binary values
+        
+        Returns
+        -------
+        torch.Tensor
+            Shape (batch_size, output_dim)
+        """
         # Treat binary input as continuous value in [0, 1]
         x_continuous = x.float().mean(dim=1, keepdim=True)
         
@@ -175,36 +334,73 @@ Encoders transform continuous inputs to discrete representations. Extend `BaseEn
 ```python
 import torch
 import torch.nn as nn
+from typing import Optional
 from difflut.encoder import BaseEncoder
+from difflut.utils.warnings import warn_default_value
 from difflut import register_encoder
+
+# Module defaults
+DEFAULT_ENCODER_NUM_BITS: int = 8
+DEFAULT_ENCODER_FEATURE_WISE: bool = True
 
 @register_encoder('my_custom_encoder')
 class MyCustomEncoder(BaseEncoder):
-    """My custom input encoder."""
+    """
+    My custom input encoder.
     
-    def __init__(self, num_bits=8, feature_wise=True):
+    Transforms continuous values to discrete binary representations.
+    """
+    
+    def __init__(
+        self,
+        num_bits: Optional[int] = None,
+        feature_wise: bool = DEFAULT_ENCODER_FEATURE_WISE,
+        flatten: bool = True
+    ) -> None:
         """
-        Initialize encoder.
+        Initialize the custom encoder.
         
-        Args:
-            num_bits: Number of bits per feature
-            feature_wise: If True, fit each feature independently
+        Parameters
+        ----------
+        num_bits : Optional[int]
+            Number of bits per feature. 
+            Defaults to DEFAULT_ENCODER_NUM_BITS.
+        feature_wise : bool
+            If True, fit each feature independently.
+            Default is True.
+        flatten : bool
+            If True, return 2D tensor. If False, return 3D.
+            Default is True.
         """
         super().__init__()
+        
+        # Apply defaults with warnings
+        if num_bits is None:
+            num_bits = DEFAULT_ENCODER_NUM_BITS
+            warn_default_value("num_bits", num_bits, stacklevel=2)
+        
         self.num_bits = num_bits
         self.feature_wise = feature_wise
+        self.flatten = flatten
         
         # Register buffers for fitted statistics
         self.register_buffer('min_vals', None)
         self.register_buffer('max_vals', None)
         self._is_fitted = False
     
-    def fit(self, data):
+    def fit(self, data: torch.Tensor) -> 'MyCustomEncoder':
         """
         Fit encoder to data (learn statistics).
         
-        Args:
-            data: Tensor of shape (N, D) with continuous values
+        Parameters
+        ----------
+        data : torch.Tensor
+            Training data of shape (N, D) with continuous values
+        
+        Returns
+        -------
+        MyCustomEncoder
+            Returns self for method chaining
         """
         if self.feature_wise:
             # Fit per feature
@@ -218,16 +414,24 @@ class MyCustomEncoder(BaseEncoder):
             self.max_vals = torch.full(data.shape[1:], max_val)
         
         self._is_fitted = True
+        return self
     
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Encode continuous input to discrete representation.
         
-        Args:
-            x: Tensor of shape (N, D) with continuous values
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input data of shape (N, D) with continuous values
         
-        Returns:
-            Tensor of shape (N, D * num_bits) with encoded values
+        Returns
+        -------
+        torch.Tensor
+            Encoded data. Shape:
+            - (N, D * num_bits) if flatten=True
+            - (N, D, num_bits) if flatten=False
+        """
         """
         if not self._is_fitted:
             raise RuntimeError("Encoder not fitted. Call fit() first.")
@@ -341,6 +545,8 @@ Layers define connectivity between inputs and LUT nodes. Extend `BaseLUTLayer`:
 import torch
 import torch.nn as nn
 from difflut.layers import BaseLUTLayer
+from difflut.nodes.node_config import NodeConfig
+from difflut.layers.layer_config import LayerConfig
 from difflut import register_layer
 
 @register_layer('my_custom_layer')
@@ -348,7 +554,7 @@ class MyCustomLayer(BaseLUTLayer):
     """My custom layer connectivity."""
     
     def __init__(self, input_size, output_size, node_type, n, 
-                 node_kwargs=None, custom_param=None):
+                 node_kwargs=None, layer_config=None, custom_param=None):
         """
         Initialize layer.
         
@@ -357,10 +563,11 @@ class MyCustomLayer(BaseLUTLayer):
             output_size: Number of output LUT nodes
             node_type: Node class to instantiate
             n: Number of inputs per LUT node
-            node_kwargs: Dict of parameters for nodes
+            node_kwargs: NodeConfig instance or dict of parameters for nodes
+            layer_config: LayerConfig instance for training parameters (optional)
             custom_param: Your custom parameter
         """
-        super().__init__(input_size, output_size, node_type, n, node_kwargs)
+        super().__init__(input_size, output_size, node_type, n, node_kwargs, layer_config)
         self.custom_param = custom_param
         
         # Define connectivity pattern
@@ -407,8 +614,8 @@ class FeatureWiseGroupingLayer(BaseLUTLayer):
     """Group features for improved interpretability."""
     
     def __init__(self, input_size, output_size, node_type, n,
-                 num_groups=None, node_kwargs=None):
-        super().__init__(input_size, output_size, node_type, n, node_kwargs)
+                 num_groups=None, node_kwargs=None, layer_config=None):
+        super().__init__(input_size, output_size, node_type, n, node_kwargs, layer_config)
         
         if num_groups is None:
             num_groups = min(8, output_size)
@@ -493,8 +700,13 @@ def apply_my_kernel(x, weights):
 ```python
 @register_node('cuda_node')
 class CUDANode(BaseNode):
+    """
+    CUDA-accelerated node with CPU fallback.
+    Processes 2D tensors: (batch_size, input_dim) → (batch_size, output_dim)
+    """
     def __init__(self, input_dim=None, output_dim=None, **kwargs):
         super().__init__(input_dim=input_dim, output_dim=output_dim, **kwargs)
+        # Weights shape: (2^input_dim, output_dim)
         self.weights = nn.Parameter(
             torch.randn(2 ** self.num_inputs, self.num_outputs)
         )
@@ -517,84 +729,182 @@ class CUDANode(BaseNode):
 
 ## Testing Your Component
 
-### Writing Tests
+DiffLUT uses a comprehensive testing framework with automatic device detection and pytest markers. All custom components should include thorough tests following established patterns.
 
+**See [Testing Guide](tests.md) for:**
+- Complete testing strategy and patterns
+- Device fixture usage and GPU marker guidelines
+- Testing utilities and helper functions
+- CI/CD integration and requirements
+- Best practices for component testing
+
+**Quick Example:**
 ```python
-import pytest
-import torch
-from difflut.nodes import MyCustomNode
-from difflut.encoder import MyCustomEncoder
-
 class TestMyCustomNode:
-    def test_forward_shape(self):
-        node = MyCustomNode(input_dim=[4], output_dim=[1])
-        x = torch.randint(0, 2, (32, 4))
+    def test_shape_correct(self, device):
+        """Test forward pass produces correct output shape."""
+        node = MyCustomNode(input_dim=4, output_dim=2).to(device)
+        x = torch.randn(8, 4).to(device)
         output = node(x)
-        assert output.shape == (32, 1)
-    
-    def test_gradients(self):
-        node = MyCustomNode(input_dim=[4], output_dim=[1])
-        x = torch.randint(0, 2, (32, 4), dtype=torch.float32)
-        
-        output = node(x)
-        loss = output.sum()
-        loss.backward()
-        
-        # Check gradients exist
-        assert node.weights.grad is not None
-        assert node.weights.grad.shape == node.weights.shape
-    
-    def test_regularization(self):
-        node = MyCustomNode(input_dim=[4], output_dim=[1])
-        reg = node.regularization()
-        assert reg.item() > 0
-
-class TestMyCustomEncoder:
-    def test_fit_and_encode(self):
-        encoder = MyCustomEncoder(num_bits=8)
-        
-        # Create training data
-        train_data = torch.randn(100, 10)
-        encoder.fit(train_data)
-        
-        # Encode
-        test_data = torch.randn(32, 10)
-        encoded = encoder(test_data)
-        
-        assert encoded.shape == (32, 10 * 8)
-    
-    def test_invalid_without_fit(self):
-        encoder = MyCustomEncoder(num_bits=8)
-        test_data = torch.randn(32, 10)
-        
-        with pytest.raises(RuntimeError):
-            encoder(test_data)
+        assert output.shape == (8, 2)
 ```
 
-### Running Tests
+For comprehensive testing examples, see `tests/test_nodes/`, `tests/test_layers/`, and `tests/test_encoders/` directories.
 
-```bash
-# Run all tests
-pytest tests/
-
-# Run specific test
-pytest tests/test_my_component.py::TestMyCustomNode::test_forward_shape
-
-# Run with coverage
-pytest --cov=difflut tests/
-```
 
 ## Registering Your Component
 
-Once implemented, components are automatically registered:
+Once implemented, components are automatically registered and can be accessed via the REGISTRY:
 
 ```python
-from difflut.registry import get_node_class
+from difflut.registry import REGISTRY
+from difflut.nodes.node_config import NodeConfig
 
 # Get your registered component
-NodeClass = get_node_class('my_custom_node')
-node = NodeClass(input_dim=[4], output_dim=[1])
+NodeClass = REGISTRY.get_node('my_custom_node')
+
+# Create instance with type-safe configuration
+node_config = NodeConfig(input_dim=4, output_dim=1)
+node = NodeClass(**node_config.to_dict())
+
+# Or instantiate directly with kwargs
+node = NodeClass(input_dim=4, output_dim=1)
 ```
+
+### Verifying Registration
+
+```python
+from difflut.registry import REGISTRY
+
+# Check if your component is registered
+if 'my_custom_node' in REGISTRY.list_nodes():
+    print("✓ Component successfully registered")
+
+# List all registered components
+print("Available nodes:", REGISTRY.list_nodes())
+print("Available encoders:", REGISTRY.list_encoders())
+print("Available layers:", REGISTRY.list_layers())
+```
+
+### Using Custom Components in Pipelines
+
+Once registered, your custom components work seamlessly with DiffLUT's configuration-driven pipeline system:
+
+```python
+from difflut.registry import REGISTRY
+from difflut.nodes.node_config import NodeConfig
+from difflut.layers.layer_config import LayerConfig
+
+# Build layer with your custom node
+MyNodeClass = REGISTRY.get_node('my_custom_node')
+LayerClass = REGISTRY.get_layer('random')
+
+node_config = NodeConfig(
+    input_dim=6,
+    output_dim=1,
+    extra_params={'my_custom_param': 42}  # Your custom parameters
+)
+
+layer_config = LayerConfig(
+    flip_probability=0.1,
+    grad_stabilization='layerwise'
+)
+
+layer = LayerClass(
+    input_size=512,
+    output_size=256,
+    node_type=MyNodeClass,
+    n=6,
+    node_kwargs=node_config,
+    layer_config=layer_config
+)
+```
+
+### Configuration File Integration
+
+Your custom components can be used in YAML/JSON configuration files:
+
+```yaml
+# model_config.yaml
+layers:
+  - name: custom_layer
+    type: random
+    node_type: my_custom_node  # Your registered name
+    input_size: 512
+    output_size: 256
+    n: 6
+    node_params:
+      input_dim: 6
+      output_dim: 1
+      my_custom_param: 42  # Goes into extra_params
+    layer_training:
+      flip_probability: 0.1
+      grad_stabilization: layerwise
+```
+
+Then load and build:
+
+```python
+import yaml
+from difflut.registry import REGISTRY
+from difflut.nodes.node_config import NodeConfig
+from difflut.layers.layer_config import LayerConfig
+
+with open('model_config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+layer_cfg = config['layers'][0]
+NodeClass = REGISTRY.get_node(layer_cfg['node_type'])
+LayerClass = REGISTRY.get_layer(layer_cfg['type'])
+
+# Build NodeConfig with registry-retrieved functions
+node_params = layer_cfg['node_params']
+
+# Get initializers and regularizers from registry if specified
+init_fn = None
+if 'init_fn_name' in node_params:
+    init_fn = REGISTRY.get_initializer(node_params['init_fn_name'])
+
+regularizers = {}
+if 'regularizer_names' in node_params:
+    for reg_name in node_params['regularizer_names']:
+        regularizers[reg_name] = REGISTRY.get_regularizer(reg_name)
+
+# Extract node-specific params
+extra_params = {k: v for k, v in node_params.items() 
+                if k not in ['input_dim', 'output_dim', 'init_fn_name', 
+                            'regularizer_names', 'init_kwargs']}
+
+node_config = NodeConfig(
+    input_dim=node_params['input_dim'],
+    output_dim=node_params['output_dim'],
+    init_fn=init_fn,
+    init_kwargs=node_params.get('init_kwargs', {}),
+    regularizers=regularizers if regularizers else None,
+    extra_params=extra_params
+)
+
+# Build LayerConfig
+layer_config = LayerConfig(**layer_cfg.get('layer_training', {}))
+
+# Create layer
+layer = LayerClass(
+    input_size=layer_cfg['input_size'],
+    output_size=layer_cfg['output_size'],
+    node_type=NodeClass,
+    n=layer_cfg['n'],
+    node_kwargs=node_config,
+    layer_config=layer_config
+)
+```
+
+**Key Pattern:**
+- Always retrieve initializers/regularizers from registry: `REGISTRY.get_initializer(name)`, `REGISTRY.get_regularizer(name)`
+- Pass function objects (not strings) to NodeConfig
+- NodeConfig stores actual functions that BaseNode receives in __init__
+- Registry maintains single source of truth for all components
+
+---
 
 ## Next Steps
 
@@ -602,11 +912,14 @@ node = NodeClass(input_dim=[4], output_dim=[1])
 2. **Start simple** - begin with a basic component
 3. **Add tests** - comprehensive test coverage
 4. **Consider CUDA** - for performance-critical nodes
-5. **Submit PR** - follow [Contributing Guide](contributing.md)
+5. **Use in pipelines** - see [Registry & Pipeline Guide](../USER_GUIDE/registry_pipeline.md) for integration
+6. **Submit PR** - follow [Contributing Guide](contributing.md)
 
 ## Resources
 
 - **Base Classes**: `difflut/nodes/base_node.py`, `difflut/encoder/base_encoder.py`, `difflut/layers/base_layer.py`
+- **Configuration Classes**: `difflut/nodes/node_config.py`, `difflut/layers/layer_config.py`
+- **Registry System**: `difflut/registry.py`
 - **Examples**: Existing implementations in respective directories
 - **Tests**: `tests/` directory
-- **Registry**: `difflut/registry.py`
+- **User Guides**: [Components Guide](../USER_GUIDE/components.md), [Registry & Pipeline Guide](../USER_GUIDE/registry_pipeline.md)
